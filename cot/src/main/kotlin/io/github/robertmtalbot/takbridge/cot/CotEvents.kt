@@ -23,6 +23,11 @@ data class MarkerSpec(
     /** Icon from an ATAK icon set, as `<set uid>/<group>/<file>`. */
     val iconsetPath: String? = null,
     val remarks: String? = null,
+    /**
+     * Where ATAK should send messages for this contact. `*:-1:stcp` means "through the server
+     * connection"; without an endpoint ATAK lists the contact but cannot message it.
+     */
+    val endpoint: String? = null,
     /** How long ATAK keeps the marker without a refresh. */
     val staleAfter: Duration = CotEvents.MARKER_STALE,
 )
@@ -38,6 +43,11 @@ data class ChatSpec(
     val messageId: String,
     /** When the message was sent. Never reported later than the event time. */
     val sentAt: Instant,
+    /**
+     * The conversation id when it differs from the room name. A direct message carries the
+     * recipient's callsign as [room] and the recipient's uid here; a group uses the name for both.
+     */
+    val roomId: String? = null,
 )
 
 /**
@@ -82,7 +92,9 @@ object CotEvents {
         val t = time(now)
         val hae = spec.altitudeMeters?.let { String.format(Locale.ROOT, "%.1f", it) } ?: UNKNOWN
         val detail = StringBuilder()
-        detail.append("<contact callsign=\"").append(escapeXml(spec.callsign)).append("\"/>")
+        detail.append("<contact callsign=\"").append(escapeXml(spec.callsign)).append('"')
+        spec.endpoint?.let { detail.append(" endpoint=\"").append(escapeXml(it)).append('"') }
+        detail.append("/>")
         if (spec.team != null || spec.role != null) {
             detail.append("<__group")
             spec.team?.let { detail.append(" name=\"").append(escapeXml(it)).append('"') }
@@ -106,18 +118,19 @@ object CotEvents {
         val t = time(now)
         val sent = time(if (spec.sentAt.isAfter(now)) now else spec.sentAt)
         val room = escapeXml(spec.room)
+        val roomId = escapeXml(spec.roomId ?: spec.room)
         val sender = escapeXml(spec.senderUid)
-        val uid = escapeXml("GeoChat.${spec.senderUid}.${spec.room}.${spec.messageId}")
+        val uid = escapeXml("GeoChat.${spec.senderUid}.${spec.roomId ?: spec.room}.${spec.messageId}")
         return "<event version=\"2.0\" uid=\"$uid\" type=\"$GEOCHAT_TYPE\"" +
             " time=\"$t\" start=\"$t\" stale=\"${time(now.plus(CHAT_STALE))}\" how=\"h-g-i-g-o\">" +
             "<point lat=\"0\" lon=\"0\" hae=\"$UNKNOWN\" ce=\"$UNKNOWN\" le=\"$UNKNOWN\"/>" +
             "<detail>" +
-            "<__chat parent=\"RootContactGroup\" groupOwner=\"false\" chatroom=\"$room\" id=\"$room\"" +
+            "<__chat parent=\"RootContactGroup\" groupOwner=\"false\" chatroom=\"$room\" id=\"$roomId\"" +
             " senderCallsign=\"${escapeXml(spec.senderCallsign)}\">" +
-            "<chatgrp uid0=\"$sender\" uid1=\"$room\" id=\"$room\"/>" +
+            "<chatgrp uid0=\"$sender\" uid1=\"$roomId\" id=\"$roomId\"/>" +
             "</__chat>" +
             "<link uid=\"$sender\" type=\"a-f-G-U-C\" relation=\"p-p\"/>" +
-            "<remarks source=\"BAO.F.ATAK.$sender\" to=\"$room\" time=\"$sent\">" +
+            "<remarks source=\"BAO.F.ATAK.$sender\" to=\"$roomId\" time=\"$sent\">" +
             escapeXml(spec.text) +
             "</remarks>" +
             "</detail>" +

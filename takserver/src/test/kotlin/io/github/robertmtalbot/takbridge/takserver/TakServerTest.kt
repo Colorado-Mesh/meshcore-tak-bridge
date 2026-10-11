@@ -158,7 +158,7 @@ class TakServerTest {
         Thread.sleep(50)
         client.send(event.substring(40) + "\n" + ping())
         val received = recorder.chats.poll(3, TimeUnit.SECONDS)
-        assertEquals(InboundChat("Mesh Ops", "ANDROID-1", "VIPER", "on scene", "m-8"), received)
+        assertEquals(InboundChat("Mesh Ops", "ANDROID-1", "VIPER", "on scene", "m-8", "Mesh Ops"), received)
         assertTrue(client.lines().readLine().contains("t-x-c-t-r"))
     }
 

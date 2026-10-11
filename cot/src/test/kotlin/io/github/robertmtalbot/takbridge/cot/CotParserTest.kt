@@ -46,6 +46,7 @@ class CotParserTest {
                 senderCallsign = "VIPER",
                 text = "on scene",
                 messageId = "6f9d2c1e-0a4b-4c58-9e11-2b7a5f0c9d3e",
+                roomId = "Mesh Ops",
             ),
             CotParser.parseGeoChat(geochat()),
         )
@@ -105,6 +106,32 @@ class CotParserTest {
         val now = Instant.parse("2026-10-11T12:00:00Z")
         val spec = ChatSpec("R&D \"lab\"", "ANDROID-9", "A<B", "5 > 3 & 2 < 4", "m-77", now)
         val parsed = CotParser.parseGeoChat(CotEvents.geoChat(spec, now))
-        assertEquals(InboundChat("R&D \"lab\"", "ANDROID-9", "A<B", "5 > 3 & 2 < 4", "m-77"), parsed)
+        assertEquals(InboundChat("R&D \"lab\"", "ANDROID-9", "A<B", "5 > 3 & 2 < 4", "m-77", "R&D \"lab\""), parsed)
+    }
+
+    @Test
+    fun readsTheClientIdentityFromItsOwnPositionReport() {
+        val xml = "<event version=\"2.0\" uid=\"ANDROID-1a2b\" type=\"a-f-G-U-C\" how=\"m-g\">" +
+            "<point lat=\"1\" lon=\"2\" hae=\"3\" ce=\"4\" le=\"5\"/><detail>" +
+            "<takv os=\"34\" version=\"5.4\" device=\"PIXEL\" platform=\"ATAK-CIV\"/>" +
+            "<contact endpoint=\"*:-1:stcp\" callsign=\"BUD\"/></detail></event>"
+        assertEquals(ClientIdentity("ANDROID-1a2b", "BUD"), CotParser.parseClientIdentity(xml))
+    }
+
+    @Test
+    fun doesNotTakeAnotherMarkerForTheClient() {
+        val xml = "<event version=\"2.0\" uid=\"X\" type=\"a-f-G-U-C\"><detail>" +
+            "<contact callsign=\"Other\"/></detail></event>"
+        assertEquals(null, CotParser.parseClientIdentity(xml))
+    }
+
+    @Test
+    fun aDirectMessageRoundTripsWithItsConversationId() {
+        val now = java.time.Instant.parse("2026-01-01T00:00:00Z")
+        val xml = CotEvents.geoChat(ChatSpec("BUD", "SENDER-1", "Bridge", "hi", "m1", now, roomId = "ANDROID-1a2b"), now)
+        val chat = CotParser.parseGeoChat(xml)!!
+        assertEquals("BUD", chat.room)
+        assertEquals("ANDROID-1a2b", chat.roomId)
+        assertEquals("SENDER-1", chat.senderUid)
     }
 }

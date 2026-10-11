@@ -21,6 +21,9 @@ interface TakServerListener {
 
     fun onClientDisconnected() {}
 
+    /** The client sent an event other than a keepalive ping. Chat is also reported to [onChat]. */
+    fun onEvent(xml: String) {}
+
     /** The connected client sent a chat message. */
     fun onChat(chat: InboundChat) {}
 
@@ -165,6 +168,7 @@ class TakServer(
             send(CotEvents.pong(now))
             return
         }
+        listener.onEvent(frame)
         val chat = CotParser.parseGeoChat(frame) ?: return
         if (!limiter.tryAcquire(now)) {
             listener.onNotice("Chat rate limit reached; a message from ATAK was dropped")

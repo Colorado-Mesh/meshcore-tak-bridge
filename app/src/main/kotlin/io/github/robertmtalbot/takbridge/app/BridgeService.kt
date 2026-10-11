@@ -10,7 +10,9 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import io.github.robertmtalbot.takbridge.cot.ClientIdentity
 import io.github.robertmtalbot.takbridge.cot.CotEvents
+import io.github.robertmtalbot.takbridge.cot.CotParser
 import io.github.robertmtalbot.takbridge.cot.InboundChat
 import io.github.robertmtalbot.takbridge.takserver.TakServer
 import io.github.robertmtalbot.takbridge.takserver.TakServerListener
@@ -33,6 +35,10 @@ class BridgeService : Service(), TakServerListener {
     @Volatile
     private var server: TakServer? = null
     private var refresher: ScheduledExecutorService? = null
+
+    /** Who the connected ATAK says it is; learned from its first position report. */
+    @Volatile
+    private var identity: ClientIdentity? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -113,12 +119,39 @@ class BridgeService : Service(), TakServerListener {
 
     override fun onClientConnected() {
         BridgeStatus.update { it.copy(clientConnected = true) }
-        BridgeStatus.log("ATAK connected; sent ${DemoData.markers.size} demo markers")
+        BridgeStatus.log("ATAK connected; sent ${DemoData.markers.size} markers")
         sendMarkers()
+        // Two room styles, to learn which ATAK shows. The third, a direct message, follows once
+        // ATAK has said who it is.
+        identity = null
         val now = Instant.now()
+        server?.send(CotEvents.geoChat(DemoData.message("Test 1 of 3: named room. Reply here.", now), now))
         server?.send(
-            CotEvents.geoChat(DemoData.message("Bridge connected. Reply in this room to test.", now), now),
+            CotEvents.geoChat(
+                DemoData.message("Test 2 of 3: All Chat Rooms. Reply here.", now, room = DemoData.ALL_CHAT),
+                now,
+            ),
         )
+    }
+
+    override fun onEvent(xml: String) {
+        val who = CotParser.parseClientIdentity(xml)
+        if (who != null) {
+            if (identity == who) return
+            identity = who
+            BridgeStatus.log("ATAK is ${who.callsign} (${who.uid})")
+            val now = Instant.now()
+            server?.send(
+                CotEvents.geoChat(
+                    DemoData.message("Test 3 of 3: direct message. Reply here.", now, who.callsign, who.uid),
+                    now,
+                ),
+            )
+            return
+        }
+        val type = CotParser.eventType(xml) ?: "?"
+        if (type == CotEvents.GEOCHAT_TYPE) return
+        BridgeStatus.log("Event from ATAK: type $type, uid ${CotParser.eventUid(xml)?.take(80)}")
     }
 
     override fun onClientDisconnected() {
@@ -127,10 +160,18 @@ class BridgeService : Service(), TakServerListener {
     }
 
     override fun onChat(chat: InboundChat) {
-        BridgeStatus.log("Chat from ${chat.senderCallsign.ifEmpty { chat.senderUid }} in \"${chat.room}\": ${chat.text}")
-        if (chat.room != DemoData.ROOM) return
+        val from = chat.senderCallsign.ifEmpty { chat.senderUid }
+        BridgeStatus.log("Chat from $from, room \"${chat.room}\", id \"${chat.roomId}\": ${chat.text}")
         val now = Instant.now()
-        server?.send(CotEvents.geoChat(DemoData.message("Bridge heard: ${chat.text}", now), now))
+        val text = "Bridge heard: ${chat.text}"
+        // Answer in the conversation the message came from: a message addressed to the bridge
+        // contact goes back to the sender directly, anything else back to its room.
+        val reply = if (chat.roomId == DemoData.BRIDGE_UID) {
+            DemoData.message(text, now, room = from, roomId = chat.senderUid)
+        } else {
+            DemoData.message(text, now, room = chat.room, roomId = chat.roomId)
+        }
+        server?.send(CotEvents.geoChat(reply, now))
     }
 
     override fun onNotice(message: String) {
