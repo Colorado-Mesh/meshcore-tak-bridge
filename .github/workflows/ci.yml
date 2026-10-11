@@ -18,9 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
@@ -28,7 +28,27 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Run tests and build the debug app
-        run: ./gradlew test assembleDebug --stacktrace
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew test assembleDebug --continue 2>&1 | tee build.log
+
+      # Puts the failing lines on the run's summary page, where they can be read without
+      # opening the full log.
+      - name: Summarise the failure
+        if: failure()
+        shell: bash
+        run: |
+          lines=$(grep -E 'FAILED|^e: |^w: |error:|Exception|AssertionError| at .*\.kt:[0-9]+|What went wrong' -A 6 build.log \
+            | grep -v '^--$' | awk '!seen[$0]++' | head -n 60 | cut -c1-300)
+          {
+            echo '### Build failure'
+            echo '```'
+            echo "$lines"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          message=$(printf '%s' "$lines" | head -c 3500 | sed -e 's/%/%25/g' | sed -e ':a' -e 'N' -e '$!ba' -e 's/\n/%0A/g')
+          echo "::error title=Build failure::$message"
 
       - name: Upload test reports
         if: failure()

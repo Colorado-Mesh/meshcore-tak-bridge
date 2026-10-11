@@ -14,6 +14,7 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.InetAddress
 import java.net.Socket
+import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
@@ -87,6 +88,33 @@ class TakServerTest {
         assertNotNull("client was not accepted", recorder.connected.poll(3, TimeUnit.SECONDS))
     }
 
+    /**
+     * Wait for a notice containing [text]. The server reports on its own threads, so a notice
+     * can arrive a moment after the socket activity that the test observed.
+     */
+    private fun awaitNotice(recorder: Recorder, text: String) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3)
+        while (System.nanoTime() < deadline) {
+            if (recorder.notices.any { it.contains(text) }) return
+            Thread.sleep(10)
+        }
+        throw AssertionError("no notice containing \"$text\"; got ${recorder.notices}")
+    }
+
+    /**
+     * Read until the server closes the connection. A close while the server still holds unread
+     * bytes from the client reaches the client as a reset, not a clean end of stream.
+     */
+    private fun Socket.awaitClosedByServer() {
+        try {
+            while (getInputStream().read() >= 0) {
+                // Discard anything sent before the close.
+            }
+        } catch (expected: SocketException) {
+            // Connection reset: the server closed it.
+        }
+    }
+
     @Test
     fun listensOnLoopbackAndReportsItsPort() {
         val port = start(Recorder())
@@ -154,8 +182,8 @@ class TakServerTest {
         val first = connect(port)
         awaitConnected(recorder)
         val second = connect(port)
-        assertEquals(-1, second.getInputStream().read())
-        assertTrue(recorder.notices.any { it.contains("second TAK connection") })
+        second.awaitClosedByServer()
+        awaitNotice(recorder, "second TAK connection")
         first.send(ping())
         assertTrue(first.lines().readLine().contains("t-x-c-t-r"))
     }
@@ -181,9 +209,9 @@ class TakServerTest {
         val client = connect(start(recorder, maxFrameBytes = 512))
         awaitConnected(recorder)
         client.send("<event uid=\"A\">" + "x".repeat(2000))
-        assertEquals(-1, client.getInputStream().read())
+        client.awaitClosedByServer()
         assertTrue(recorder.disconnected.await(3, TimeUnit.SECONDS))
-        assertTrue(recorder.notices.any { it.contains("oversized") })
+        awaitNotice(recorder, "oversized")
     }
 
     @Test
@@ -195,7 +223,7 @@ class TakServerTest {
         assertTrue(client.lines().readLine().contains("t-x-c-t-r"))
         assertEquals(listOf("a", "bb"), listOf(recorder.chats.poll()?.text, recorder.chats.poll()?.text))
         assertNull(recorder.chats.poll())
-        assertTrue(recorder.notices.any { it.contains("rate limit") })
+        awaitNotice(recorder, "rate limit")
     }
 
     @Test
