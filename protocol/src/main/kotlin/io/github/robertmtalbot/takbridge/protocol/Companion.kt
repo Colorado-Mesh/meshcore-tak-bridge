@@ -27,11 +27,71 @@ data class DeviceInfo(
     val version: String,
 )
 
+/** A node the radio knows about, from its contact list or a newly heard advert. */
+data class Contact(
+    /** 64 lowercase hex characters. */
+    val publicKeyHex: String,
+    /** One of the `TYPE_` constants; other values are kinds this app does not know. */
+    val type: Int,
+    val name: String,
+    /** Unix seconds when the node last advertised, by the sender's clock. */
+    val lastAdvert: Long,
+    val latitude: Double,
+    val longitude: Double,
+) {
+    /** A node that shares no position reports exactly 0, 0. */
+    val hasPosition: Boolean
+        get() = (latitude != 0.0 || longitude != 0.0) && latitude in -90.0..90.0 && longitude in -180.0..180.0
+
+    companion object {
+        const val TYPE_COMPANION = 1
+        const val TYPE_REPEATER = 2
+        const val TYPE_ROOM_SERVER = 3
+        const val TYPE_SENSOR = 4
+    }
+}
+
+/** A channel programmed into the radio. The channel's secret is never read out of the frame. */
+data class Channel(val index: Int, val name: String)
+
+/** A text message received on a channel. The text is as sent: usually `Sender name: message`. */
+data class ChannelMessage(
+    val channelIndex: Int,
+    val text: String,
+    /** Unix seconds, by the sender's clock. */
+    val timestamp: Long,
+)
+
 /** One frame received from the radio, as far as the bridge understands it. */
 sealed interface CompanionFrame {
     data class Self(val info: SelfInfo) : CompanionFrame
     data class Device(val info: DeviceInfo) : CompanionFrame
     data object Ok : CompanionFrame
+
+    /** First answer to a contact list request. */
+    data object ContactsStart : CompanionFrame
+
+    /** [pushed] is true when the radio volunteered it for a newly heard node. */
+    data class ContactEntry(val contact: Contact, val pushed: Boolean) : CompanionFrame
+
+    /** Last answer to a contact list request; [lastModified] can be sent back to ask for changes only. */
+    data class ContactsEnd(val lastModified: Long) : CompanionFrame
+
+    /** One channel slot; [channel] is null when the slot is not programmed. */
+    data class ChannelSlot(val index: Int, val channel: Channel?) : CompanionFrame
+
+    data class ChannelText(val message: ChannelMessage) : CompanionFrame
+
+    /** A queued message of a kind the bridge does not carry, such as a direct message. */
+    data class OtherMessage(val code: Int) : CompanionFrame
+
+    data object NoMoreMessages : CompanionFrame
+
+    /** The radio has queued messages to collect. */
+    data object MessagesWaiting : CompanionFrame
+
+    /** The radio heard an advert from a node already in its contact list. */
+    data object AdvertHeard : CompanionFrame
     data class Error(val code: Int?) : CompanionFrame
 
     /** A frame the bridge does not read yet, or one too short to be what its code claims. */
@@ -56,6 +116,32 @@ object CompanionFrames {
     private const val RESP_SELF_INFO = 0x05
     private const val RESP_DEVICE_INFO = 0x0D
 
+    private const val CMD_SEND_CHANNEL_TEXT = 0x03
+    private const val CMD_GET_CONTACTS = 0x04
+    private const val CMD_SYNC_NEXT_MESSAGE = 0x0A
+    private const val CMD_GET_CHANNEL = 0x1F
+    private const val RESP_CONTACTS_START = 0x02
+    private const val RESP_CONTACT = 0x03
+    private const val RESP_END_OF_CONTACTS = 0x04
+    private const val RESP_SENT = 0x06
+    private const val RESP_CONTACT_MSG = 0x07
+    private const val RESP_CHANNEL_MSG = 0x08
+    private const val RESP_NO_MORE_MESSAGES = 0x0A
+    private const val RESP_CONTACT_MSG_V3 = 0x10
+    private const val RESP_CHANNEL_MSG_V3 = 0x11
+    private const val RESP_CHANNEL_INFO = 0x12
+    private const val RESP_CHANNEL_DATA = 0x1B
+    private const val PUSH_ADVERT = 0x80
+    private const val PUSH_MSG_WAITING = 0x83
+    private const val PUSH_NEW_ADVERT = 0x8A
+    private const val TEXT_TYPE_PLAIN = 0
+
+    private const val CONTACT_BYTES = 148
+    private const val CHANNEL_INFO_BYTES = 50
+
+    /** The most text bytes a channel message carries, sender name and separator included. */
+    const val MAX_CHANNEL_TEXT_BYTES = 160
+
     private const val SELF_INFO_FIXED_BYTES = 58
     private const val DEVICE_INFO_V3_BYTES = 80
     private const val MAX_APP_NAME_BYTES = 12
@@ -72,6 +158,22 @@ object CompanionFrames {
     /** Asks for firmware and capacity; the radio answers with [CompanionFrame.Device]. */
     fun deviceQuery(): ByteArray = byteArrayOf(CMD_DEVICE_QUERY.toByte(), APP_PROTOCOL_VERSION.toByte())
 
+    /** Asks for the contact list, or with [since] only for contacts changed after that time. */
+    fun getContacts(since: Long = 0): ByteArray =
+        if (since > 0) byteArrayOf(CMD_GET_CONTACTS.toByte()) + le32(since) else byteArrayOf(CMD_GET_CONTACTS.toByte())
+
+    fun getChannel(index: Int): ByteArray = byteArrayOf(CMD_GET_CHANNEL.toByte(), index.toByte())
+
+    /** Collects one queued message; the radio answers with it or with [CompanionFrame.NoMoreMessages]. */
+    fun syncNextMessage(): ByteArray = byteArrayOf(CMD_SYNC_NEXT_MESSAGE.toByte())
+
+    /** Sends [text] on a channel. The radio adds its own name in front before transmitting. */
+    fun sendChannelText(channelIndex: Int, timestampSeconds: Long, text: String): ByteArray =
+        byteArrayOf(CMD_SEND_CHANNEL_TEXT.toByte(), TEXT_TYPE_PLAIN.toByte(), channelIndex.toByte()) +
+            le32(timestampSeconds) + text.toByteArray(Charsets.UTF_8)
+
+    private fun le32(value: Long) = ByteArray(4) { (value shr (8 * it)).toByte() }
+
     fun parse(frame: ByteArray): CompanionFrame? {
         if (frame.isEmpty()) return null
         val code = frame[0].toInt() and 0xFF
@@ -80,16 +182,65 @@ object CompanionFrames {
             RESP_ERROR -> CompanionFrame.Error(frame.getOrNull(1)?.let { it.toInt() and 0xFF })
             RESP_SELF_INFO -> parseSelfInfo(frame)
             RESP_DEVICE_INFO -> parseDeviceInfo(frame)
+            RESP_SENT -> CompanionFrame.Ok
+            RESP_CONTACTS_START -> CompanionFrame.ContactsStart
+            RESP_CONTACT -> parseContact(frame)?.let { CompanionFrame.ContactEntry(it, pushed = false) }
+            PUSH_NEW_ADVERT -> parseContact(frame)?.let { CompanionFrame.ContactEntry(it, pushed = true) }
+            RESP_END_OF_CONTACTS -> CompanionFrame.ContactsEnd(if (frame.size >= 5) uint32(frame, 1) else 0)
+            RESP_CHANNEL_INFO -> parseChannel(frame)
+            RESP_CHANNEL_MSG -> parseChannelText(frame, 1)
+            RESP_CHANNEL_MSG_V3 -> parseChannelText(frame, 4)
+            RESP_CONTACT_MSG, RESP_CONTACT_MSG_V3, RESP_CHANNEL_DATA -> CompanionFrame.OtherMessage(code)
+            RESP_NO_MORE_MESSAGES -> CompanionFrame.NoMoreMessages
+            PUSH_MSG_WAITING -> CompanionFrame.MessagesWaiting
+            PUSH_ADVERT -> CompanionFrame.AdvertHeard
             else -> null
         } ?: CompanionFrame.Other(code, frame.size)
     }
+
+    private fun parseContact(frame: ByteArray): Contact? {
+        if (frame.size < CONTACT_BYTES) return null
+        return Contact(
+            publicKeyHex = hex(frame, 1, 32),
+            type = frame[33].toInt() and 0xFF,
+            name = text(frame, 100, 32),
+            lastAdvert = uint32(frame, 132),
+            latitude = int32(frame, 136) / 1e6,
+            longitude = int32(frame, 140) / 1e6,
+        )
+    }
+
+    /** Bytes 34 to 49 hold the channel's secret; only whether it is set is looked at. */
+    private fun parseChannel(frame: ByteArray): CompanionFrame? {
+        if (frame.size < CHANNEL_INFO_BYTES) return null
+        val index = frame[1].toInt() and 0xFF
+        val name = text(frame, 2, 32)
+        val programmed = name.isNotEmpty() && (34 until 50).any { frame[it].toInt() != 0 }
+        return CompanionFrame.ChannelSlot(index, if (programmed) Channel(index, name) else null)
+    }
+
+    /** [start] is where the channel index sits: 1 in the old layout, 4 after the signal bytes in the new. */
+    private fun parseChannelText(frame: ByteArray, start: Int): CompanionFrame? {
+        if (frame.size < start + 7) return null
+        if (frame[start + 2].toInt() != TEXT_TYPE_PLAIN) return CompanionFrame.OtherMessage(frame[0].toInt() and 0xFF)
+        return CompanionFrame.ChannelText(
+            ChannelMessage(
+                channelIndex = frame[start].toInt() and 0xFF,
+                text = text(frame, start + 7, frame.size - start - 7),
+                timestamp = uint32(frame, start + 3),
+            ),
+        )
+    }
+
+    private fun hex(frame: ByteArray, offset: Int, length: Int): String =
+        frame.copyOfRange(offset, offset + length).joinToString("") { "%02x".format(it.toInt() and 0xFF) }
 
     private fun parseSelfInfo(frame: ByteArray): CompanionFrame? {
         if (frame.size < SELF_INFO_FIXED_BYTES) return null
         return CompanionFrame.Self(
             SelfInfo(
                 name = text(frame, SELF_INFO_FIXED_BYTES, frame.size - SELF_INFO_FIXED_BYTES),
-                publicKeyHex = frame.copyOfRange(4, 36).joinToString("") { "%02x".format(it.toInt() and 0xFF) },
+                publicKeyHex = hex(frame, 4, 32),
                 latitude = int32(frame, 36) / 1e6,
                 longitude = int32(frame, 40) / 1e6,
                 frequencyMhz = uint32(frame, 48) / 1000.0,

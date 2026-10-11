@@ -17,10 +17,17 @@ import io.github.robertmtalbot.takbridge.cot.ClientIdentity
 import io.github.robertmtalbot.takbridge.cot.CotEvents
 import io.github.robertmtalbot.takbridge.cot.CotParser
 import io.github.robertmtalbot.takbridge.cot.InboundChat
+import io.github.robertmtalbot.takbridge.protocol.Channel
+import io.github.robertmtalbot.takbridge.protocol.ChannelMessage
+import io.github.robertmtalbot.takbridge.protocol.CompanionClient
+import io.github.robertmtalbot.takbridge.protocol.Contact
+import io.github.robertmtalbot.takbridge.protocol.DeviceInfo
+import io.github.robertmtalbot.takbridge.protocol.SelfInfo
 import io.github.robertmtalbot.takbridge.takserver.TakServer
 import io.github.robertmtalbot.takbridge.takserver.TakServerListener
 import java.io.IOException
 import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
@@ -31,14 +38,19 @@ import java.util.concurrent.TimeUnit
  *
  * Until the radio link exists it serves [DemoData]: fixed markers and a chat room that echoes.
  */
-class BridgeService : Service(), TakServerListener {
+class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
     /** Socket work stays off the main thread, where Android forbids network calls. */
     private val worker = Executors.newSingleThreadExecutor()
 
     @Volatile
     private var server: TakServer? = null
     private var refresher: ScheduledExecutorService? = null
+    @Volatile
     private var radio: RadioSession? = null
+    private val mesh = MeshPicture()
+
+    /** Which room each channel's last outgoing message came from, for reporting a failed send there. */
+    private val pendingRooms = ConcurrentHashMap<Int, String>()
 
     /** Who the connected ATAK says it is; learned from its first position report. */
     @Volatile
@@ -63,7 +75,83 @@ class BridgeService : Service(), TakServerListener {
     /** Main thread. Replaces any earlier radio link. */
     private fun connectRadio(address: String) {
         radio?.close()
-        radio = RadioSession(applicationContext, address).also { it.open() }
+        mesh.clear()
+        var session: RadioSession? = null
+        session = RadioSession(applicationContext, address, this) {
+            // Only the current session's end clears the picture; an old one closing late must not.
+            if (radio === session) mesh.clear()
+        }
+        radio = session
+        session.open()
+    }
+
+    override fun onLog(message: String) = BridgeStatus.log("Radio: $message")
+
+    override fun onSelf(info: SelfInfo) {
+        mesh.setSelf(info)
+        BridgeStatus.update { it.copy(radio = "Radio: ${info.name}") }
+        BridgeStatus.log(
+            "Radio: this is \"${info.name}\", ${info.frequencyMhz} MHz, BW ${info.bandwidthKhz} kHz, " +
+                "SF${info.spreadingFactor}, CR${info.codingRate}",
+        )
+    }
+
+    override fun onDevice(info: DeviceInfo) {
+        BridgeStatus.log("Radio: firmware ${info.version}, ${info.model}, ${info.maxChannels} channel slots")
+    }
+
+    override fun onContact(contact: Contact) {
+        mesh.putContact(contact)
+        if (contact.hasPosition) server?.let { active -> sendMeshMarkers(active, only = contact) }
+    }
+
+    override fun onChannels(channels: List<Channel>) {
+        mesh.setChannels(channels)
+        val names = channels.joinToString { "${it.index}: ${it.name}" }.ifEmpty { "none" }
+        BridgeStatus.log("Radio: ${mesh.contactCount} contacts, ${mesh.positionedCount} with a position")
+        BridgeStatus.log("Radio: ${channels.size} channels ($names)")
+        BridgeStatus.update { it.copy(radio = "${it.radio}\n${channels.size} channels, ${mesh.positionedCount} nodes on the map") }
+        sendPicture()
+    }
+
+    override fun onChannelMessage(message: ChannelMessage) {
+        val now = Instant.now()
+        val line = mesh.chatLine(message, now)
+        if (line == null) {
+            BridgeStatus.log("Radio: message on unknown channel ${message.channelIndex} ignored")
+            return
+        }
+        BridgeStatus.log("Mesh to ATAK, \"${line.room}\": ${message.text}")
+        server?.send(CotEvents.geoChat(line, now))
+    }
+
+    override fun onSendResult(channelIndex: Int, text: String, accepted: Boolean) {
+        if (accepted) {
+            BridgeStatus.log("ATAK to mesh, channel $channelIndex: sent")
+            return
+        }
+        BridgeStatus.log("ATAK to mesh, channel $channelIndex: the radio did not take the message")
+        val room = pendingRooms[channelIndex] ?: return
+        val now = Instant.now()
+        server?.send(CotEvents.geoChat(mesh.notice(room, "Not sent to the mesh: ${text.take(40)}", now), now))
+    }
+
+    /** Everything ATAK should see for the linked radio: markers, and a line to open each room. */
+    private fun sendPicture() {
+        val active = server ?: return
+        if (!active.hasClient) return
+        sendMeshMarkers(active)
+        val now = Instant.now()
+        for (opener in mesh.roomOpeners(now)) active.send(CotEvents.geoChat(opener, now))
+    }
+
+    private fun sendMeshMarkers(active: TakServer, only: Contact? = null) {
+        if (!active.hasClient) return
+        val now = Instant.now()
+        val wanted = only?.let { "MESHCORE-${it.publicKeyHex.take(16)}" }
+        for (marker in mesh.markers()) {
+            if (wanted == null || marker.uid == wanted) active.send(CotEvents.marker(marker, now))
+        }
     }
 
     override fun onDestroy() {
@@ -133,45 +221,33 @@ class BridgeService : Service(), TakServerListener {
     private fun sendMarkers() {
         val active = server ?: return
         if (!active.hasClient) return
+        if (mesh.hasRadio) {
+            sendMeshMarkers(active)
+            return
+        }
         val now = Instant.now()
         for (marker in DemoData.markers) active.send(CotEvents.marker(marker, now))
     }
 
     override fun onClientConnected() {
         BridgeStatus.update { it.copy(clientConnected = true) }
-        BridgeStatus.log("ATAK connected; sent ${DemoData.markers.size} markers")
-        sendMarkers()
-        // Two room styles, to learn which ATAK shows. The third, a direct message, follows once
-        // ATAK has said who it is.
         identity = null
+        if (mesh.hasRadio) {
+            BridgeStatus.log("ATAK connected; sending ${mesh.positionedCount} mesh nodes and ${mesh.channelCount} channels")
+            sendPicture()
+            return
+        }
+        BridgeStatus.log("ATAK connected; no radio linked, so sending ${DemoData.markers.size} demo markers")
+        sendMarkers()
         val now = Instant.now()
-        server?.send(CotEvents.geoChat(DemoData.message("Test 1 of 3: named room. Reply here.", now), now))
-        server?.send(
-            CotEvents.geoChat(
-                DemoData.message("Test 2 of 3: All Chat Rooms. Reply here.", now, room = DemoData.ALL_CHAT),
-                now,
-            ),
-        )
+        server?.send(CotEvents.geoChat(DemoData.message("No radio linked yet. This is a demo room.", now), now))
     }
 
     override fun onEvent(xml: String) {
-        val who = CotParser.parseClientIdentity(xml)
-        if (who != null) {
-            if (identity == who) return
-            identity = who
-            BridgeStatus.log("ATAK is ${who.callsign} (${who.uid})")
-            val now = Instant.now()
-            server?.send(
-                CotEvents.geoChat(
-                    DemoData.message("Test 3 of 3: direct message. Reply here.", now, who.callsign, who.uid),
-                    now,
-                ),
-            )
-            return
-        }
-        val type = CotParser.eventType(xml) ?: "?"
-        if (type == CotEvents.GEOCHAT_TYPE) return
-        BridgeStatus.log("Event from ATAK: type $type, uid ${CotParser.eventUid(xml)?.take(80)}")
+        val who = CotParser.parseClientIdentity(xml) ?: return
+        if (identity == who) return
+        identity = who
+        BridgeStatus.log("ATAK is ${who.callsign} (${who.uid})")
     }
 
     override fun onClientDisconnected() {
@@ -180,18 +256,29 @@ class BridgeService : Service(), TakServerListener {
     }
 
     override fun onChat(chat: InboundChat) {
-        val from = chat.senderCallsign.ifEmpty { chat.senderUid }
-        BridgeStatus.log("Chat from $from, room \"${chat.room}\", id \"${chat.roomId}\": ${chat.text}")
         val now = Instant.now()
-        val text = "Bridge heard: ${chat.text}"
-        // Answer in the conversation the message came from: a message addressed to the bridge
-        // contact goes back to the sender directly, anything else back to its room.
-        val reply = if (chat.roomId == DemoData.BRIDGE_UID) {
-            DemoData.message(text, now, room = from, roomId = chat.senderUid)
-        } else {
-            DemoData.message(text, now, room = chat.room, roomId = chat.roomId)
+        val session = radio
+        if (!mesh.hasRadio || session == null) {
+            BridgeStatus.log("Chat from ATAK in \"${chat.room}\" (no radio linked): ${chat.text}")
+            val reply = DemoData.message("Bridge heard: ${chat.text}", now, room = chat.room, roomId = chat.roomId)
+            server?.send(CotEvents.geoChat(reply, now))
+            return
         }
-        server?.send(CotEvents.geoChat(reply, now))
+        val channel = mesh.channelFor(chat.room)
+        if (channel == null) {
+            BridgeStatus.log("Chat from ATAK in \"${chat.room}\" is not for a mesh channel; not sent")
+            return
+        }
+        val bytes = chat.text.toByteArray(Charsets.UTF_8).size
+        val limit = mesh.maxTextBytes()
+        if (bytes > limit) {
+            BridgeStatus.log("ATAK to mesh, \"${chat.room}\": too long ($bytes of $limit bytes); not sent")
+            server?.send(CotEvents.geoChat(mesh.notice(chat.room, "Not sent: too long for the mesh ($bytes of $limit bytes).", now), now))
+            return
+        }
+        BridgeStatus.log("ATAK to mesh, \"${chat.room}\": ${chat.text}")
+        pendingRooms[channel.index] = chat.room
+        session.sendChannelText(channel.index, chat.text)
     }
 
     override fun onNotice(message: String) {

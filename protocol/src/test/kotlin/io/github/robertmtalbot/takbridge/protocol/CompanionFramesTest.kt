@@ -68,7 +68,7 @@ class CompanionFramesTest {
         assertEquals(CompanionFrame.Ok, CompanionFrames.parse(byteArrayOf(0)))
         assertEquals(CompanionFrame.Error(2), CompanionFrames.parse(byteArrayOf(1, 2)))
         assertEquals(CompanionFrame.Error(null), CompanionFrames.parse(byteArrayOf(1)))
-        assertEquals(CompanionFrame.Other(0x83, 1), CompanionFrames.parse(byteArrayOf(0x83.toByte())))
+        assertEquals(CompanionFrame.Other(0x88, 1), CompanionFrames.parse(byteArrayOf(0x88.toByte())))
         assertNull(CompanionFrames.parse(ByteArray(0)))
     }
 }
