@@ -64,7 +64,7 @@ class TakServer(
             serverSocket?.let { return it.localPort }
             val socket = ServerSocket()
             socket.reuseAddress = true
-            socket.bind(InetSocketAddress(InetAddress.getLoopbackAddress(), port), 1)
+            socket.bind(InetSocketAddress(LOOPBACK_V4, port), 1)
             serverSocket = socket
             Thread({ acceptLoop(socket) }, "tak-server-accept").apply { isDaemon = true }.start()
             return socket.localPort
@@ -187,6 +187,11 @@ class TakServer(
         /** Chat messages the client may send per window; a mesh channel carries far less. */
         const val DEFAULT_CHAT_LIMIT = 10
         val DEFAULT_CHAT_WINDOW: Duration = Duration.ofMinutes(1)
+        /**
+         * The IPv4 loopback address, spelled out. `InetAddress.getLoopbackAddress()` is `::1` on
+         * Android, and a server bound there refuses a client that dials 127.0.0.1.
+         */
+        val LOOPBACK_V4: InetAddress = InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1))
         private const val READ_BUFFER_BYTES = 8192
     }
 }
