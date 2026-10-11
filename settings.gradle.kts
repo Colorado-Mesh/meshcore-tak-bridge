@@ -23,4 +23,5 @@ rootProject.name = "meshcore-tak-bridge"
 
 include(":cot")
 include(":takserver")
+include(":protocol")
 include(":app")

@@ -1,5 +1,6 @@
 package io.github.robertmtalbot.takbridge.app
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,9 +8,11 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import io.github.robertmtalbot.takbridge.app.ble.RadioSession
 import io.github.robertmtalbot.takbridge.cot.ClientIdentity
 import io.github.robertmtalbot.takbridge.cot.CotEvents
 import io.github.robertmtalbot.takbridge.cot.CotParser
@@ -35,6 +38,7 @@ class BridgeService : Service(), TakServerListener {
     @Volatile
     private var server: TakServer? = null
     private var refresher: ScheduledExecutorService? = null
+    private var radio: RadioSession? = null
 
     /** Who the connected ATAK says it is; learned from its first position report. */
     @Volatile
@@ -49,10 +53,22 @@ class BridgeService : Service(), TakServerListener {
         }
         startInForeground()
         worker.execute { startServer() }
+        when (intent?.action) {
+            ACTION_CONNECT_RADIO -> intent.getStringExtra(EXTRA_ADDRESS)?.let { connectRadio(it) }
+            ACTION_DISCONNECT_RADIO -> radio?.close()
+        }
         return START_STICKY
     }
 
+    /** Main thread. Replaces any earlier radio link. */
+    private fun connectRadio(address: String) {
+        radio?.close()
+        radio = RadioSession(applicationContext, address).also { it.open() }
+    }
+
     override fun onDestroy() {
+        radio?.close()
+        radio = null
         worker.execute {
             refresher?.shutdownNow()
             refresher = null
@@ -84,7 +100,11 @@ class BridgeService : Service(), TakServerListener {
             .setOngoing(true)
             .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            // Android only allows the connected-device type once Bluetooth permission is held.
+            val bluetooth = checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+            val type = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
+                (if (bluetooth) ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE else 0)
+            startForeground(NOTIFICATION_ID, notification, type)
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
@@ -180,6 +200,9 @@ class BridgeService : Service(), TakServerListener {
 
     companion object {
         const val ACTION_STOP = "io.github.robertmtalbot.takbridge.STOP"
+        const val ACTION_CONNECT_RADIO = "io.github.robertmtalbot.takbridge.CONNECT_RADIO"
+        const val ACTION_DISCONNECT_RADIO = "io.github.robertmtalbot.takbridge.DISCONNECT_RADIO"
+        const val EXTRA_ADDRESS = "address"
         private const val CHANNEL_ID = "bridge-status"
         private const val NOTIFICATION_ID = 1
         private const val REFRESH_MINUTES = 5L

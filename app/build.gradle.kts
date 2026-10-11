@@ -28,4 +28,5 @@ kotlin {
 dependencies {
     implementation(project(":cot"))
     implementation(project(":takserver"))
+    implementation(project(":protocol"))
 }

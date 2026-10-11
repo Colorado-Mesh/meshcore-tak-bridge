@@ -9,6 +9,10 @@ data class BridgeState(
     val running: Boolean = false,
     val port: Int = 0,
     val clientConnected: Boolean = false,
+    /** One line on the radio link, for the status screen. */
+    val radio: String = "No radio",
+    /** True from the start of a connection attempt until the link closes. */
+    val radioBusy: Boolean = false,
     val log: List<String> = emptyList(),
 )
 
