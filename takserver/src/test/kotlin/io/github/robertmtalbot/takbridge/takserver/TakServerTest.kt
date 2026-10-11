@@ -12,7 +12,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.BufferedReader
 import java.io.InputStreamReader
-import java.net.InetAddress
 import java.net.Socket
 import java.net.SocketException
 import java.net.SocketTimeoutException
@@ -64,7 +63,7 @@ class TakServerTest {
     }
 
     private fun connect(port: Int): Socket {
-        val socket = Socket(InetAddress.getLoopbackAddress(), port)
+        val socket = Socket(TakServer.LOOPBACK_V4, port)
         socket.soTimeout = 3000
         sockets.add(socket)
         return socket
