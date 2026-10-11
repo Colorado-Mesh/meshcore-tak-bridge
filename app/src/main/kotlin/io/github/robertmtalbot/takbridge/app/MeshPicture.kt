@@ -1,6 +1,7 @@
 package io.github.robertmtalbot.takbridge.app
 
 import io.github.robertmtalbot.takbridge.cot.ChatSpec
+import io.github.robertmtalbot.takbridge.cot.ClientIdentity
 import io.github.robertmtalbot.takbridge.cot.MarkerSpec
 import io.github.robertmtalbot.takbridge.protocol.Channel
 import io.github.robertmtalbot.takbridge.protocol.ChannelMessage
@@ -14,11 +15,12 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * What the bridge knows about the mesh through the connected radio, and how each piece is shown
- * in ATAK: nodes with a position become markers, and each channel becomes a chat room.
+ * in ATAK: nodes with a position become markers, and each channel becomes a contact.
  *
- * Every chat line is sent as coming from one contact that stands for the radio. ATAK only sends
- * into a room when it knows a member it can reach, and that contact, announced as reachable
- * through this connection, is that member. The mesh sender's name stays in the text.
+ * A channel is a contact, not a group chat room, because of how ATAK addresses replies. It sends
+ * a reply to a contact it can reach, and the event names that contact, so a contact per channel
+ * tells the bridge exactly which channel a message is for. The mesh sender's name stays in the
+ * text, as MeshCore sends it.
  */
 class MeshPicture {
     @Volatile
@@ -54,9 +56,15 @@ class MeshPicture {
         contacts.clear()
     }
 
-    fun channelFor(room: String): Channel? = rooms[room]
+    /** The channel a chat event from ATAK is for, going by the contact it was addressed to. */
+    fun channelFor(room: String, roomId: String?): Channel? =
+        rooms.values.firstOrNull { uidFor(it.index) == roomId } ?: rooms.entries.firstOrNull { callsign(it.key) == room }?.value
 
-    private fun roomFor(channelIndex: Int): String? = rooms.entries.firstOrNull { it.value.index == channelIndex }?.key
+    private fun nameFor(channelIndex: Int): String? = rooms.entries.firstOrNull { it.value.index == channelIndex }?.key
+
+    private fun uidFor(channelIndex: Int) = "MESHCORE-CH-$channelIndex"
+
+    private fun callsign(channelName: String) = "Mesh: $channelName"
 
     /** The most text ATAK may send on a channel: the radio puts its own name and ": " in front. */
     fun maxTextBytes(): Int {
@@ -64,23 +72,26 @@ class MeshPicture {
         return (CompanionFrames.MAX_CHANNEL_TEXT_BYTES - nameBytes - 3).coerceIn(20, 133)
     }
 
-    /** The radio contact first, then every node that shares a position. */
+    /** A contact for every channel, then every node that shares a position. */
     fun markers(): List<MarkerSpec> {
-        val radio = self ?: return emptyList()
+        if (self == null) return emptyList()
         val list = ArrayList<MarkerSpec>()
-        list.add(
-            MarkerSpec(
-                uid = RADIO_UID,
-                cotType = "a-f-G-U-C",
-                callsign = "Mesh via ${radio.name}",
-                latitude = radio.latitude.takeIf { it in -90.0..90.0 } ?: 0.0,
-                longitude = radio.longitude.takeIf { it in -180.0..180.0 } ?: 0.0,
-                team = "Cyan",
-                role = "Team Member",
-                remarks = "MeshCore radio linked through MeshCore TAK Bridge",
-                endpoint = "*:-1:stcp",
-            ),
-        )
+        for ((name, channel) in rooms) {
+            // A contact has to have a point. A channel has no place, so it sits at 0, 0, off any map in use.
+            list.add(
+                MarkerSpec(
+                    uid = uidFor(channel.index),
+                    cotType = "a-f-G-U-C",
+                    callsign = callsign(name),
+                    latitude = 0.0,
+                    longitude = 0.0,
+                    team = "White",
+                    role = "Team Member",
+                    remarks = "MeshCore channel ${channel.index}, linked through MeshCore TAK Bridge",
+                    endpoint = "*:-1:stcp",
+                ),
+            )
+        }
         for (contact in contacts.values) {
             if (!contact.hasPosition) continue
             val companion = contact.type == Contact.TYPE_COMPANION
@@ -118,33 +129,36 @@ class MeshPicture {
         else -> "node"
     }
 
-    /** One line per channel so its room exists in ATAK. The fixed id makes ATAK keep only one copy. */
-    fun roomOpeners(now: Instant): List<ChatSpec> = rooms.keys.map { room ->
-        line(room, "Mesh channel \"$room\" is linked. Messages sent here go out over the radio.", now, "open-${room.hashCode()}")
+    /** One line per channel so its conversation exists in ATAK. The fixed id makes ATAK keep only one copy. */
+    fun openers(atak: ClientIdentity, now: Instant): List<ChatSpec> = rooms.map { (name, channel) ->
+        line(channel.index, name, atak, "Mesh channel \"$name\" is linked. Messages sent here go out over the radio.", now, "open-${name.hashCode()}")
     }
 
-    /** A received channel message as a line in its room, or null when the channel is not known. */
-    fun chatLine(message: ChannelMessage, now: Instant): ChatSpec? {
-        val room = roomFor(message.channelIndex) ?: return null
+    /** A received channel message as a line from its channel's contact, or null when the channel is not known. */
+    fun chatLine(message: ChannelMessage, atak: ClientIdentity): ChatSpec? {
+        val name = nameFor(message.channelIndex) ?: return null
         val id = "rx-${message.channelIndex}-${message.timestamp}-${Integer.toHexString(message.text.hashCode())}"
-        return line(room, message.text, Instant.ofEpochSecond(message.timestamp), id)
+        return line(message.channelIndex, name, atak, message.text, Instant.ofEpochSecond(message.timestamp), id)
     }
 
     /** A line from the bridge itself, such as a note that a message could not be sent. */
-    fun notice(room: String, text: String, now: Instant): ChatSpec =
-        line(room, text, now, "note-${now.toEpochMilli()}")
+    fun notice(channelIndex: Int, atak: ClientIdentity, text: String, now: Instant): ChatSpec? {
+        val name = nameFor(channelIndex) ?: return null
+        return line(channelIndex, name, atak, text, now, "note-${now.toEpochMilli()}")
+    }
 
-    private fun line(room: String, text: String, sentAt: Instant, id: String) = ChatSpec(
-        room = room,
-        senderUid = RADIO_UID,
-        senderCallsign = "Mesh",
+    /** A direct message to the ATAK user from the channel's contact. */
+    private fun line(channelIndex: Int, name: String, atak: ClientIdentity, text: String, sentAt: Instant, id: String) = ChatSpec(
+        room = atak.callsign,
+        roomId = atak.uid,
+        senderUid = uidFor(channelIndex),
+        senderCallsign = callsign(name),
         text = text,
         messageId = id,
         sentAt = sentAt,
     )
 
     private companion object {
-        const val RADIO_UID = "MESHCORE-BRIDGE"
         val TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneOffset.UTC)
     }
 }
