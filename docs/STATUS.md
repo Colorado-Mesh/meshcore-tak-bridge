@@ -46,7 +46,7 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
 1. A signed release APK and a settled application ID (currently `io.github.robertmtalbot.takbridge`).
 2. Possibly: ATAK delivery receipts (`b-t-f-d`) for acknowledged direct messages, so ATAK shows them as delivered; and room server posts, which arrive as signed messages and are skipped for now.
 3. **Reply to a sender on a channel**, if it can be done well. Requested 2026-10-12. To work out:
-   - How the MeshCore apps mark a reply or mention. They are understood to begin the text with the sender's name as `@[Name]`; check this against the app and the firmware before building on it.
+   - The reply form is `@[Name]` at the start of the text, as the MeshCore apps write it (confirmed by use, 2026-10-12). The firmware gives it no special handling: channel text is sent exactly as written, so this is a convention between apps, and the bridge only has to write the text that way.
    - ATAK's chat has no reply action, and adding one would need a plugin. The likely route is a typed convention: a message from ATAK that starts with `@Name` (or `@"Two Words"`) goes out as `@[Name] …`, so MeshCore users see a normal reply.
    - Matching the name: offer only names heard on that channel recently, ignore case, and send the text unchanged when the name does not match, so nothing is altered by surprise.
    - Received replies: show `@[Name]` as it is, or tidy it to `@Name`. Possibly mark one addressed to this radio's name.
