@@ -22,16 +22,15 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
 - **Direct messages** between the ATAK user and companion nodes, both ways, with acknowledgements logged as delivered (tested 2026-10-12).
   - Companions on the map are reachable ATAK contacts. A companion with no position becomes a contact at 0, 0 once a direct message has passed with it.
   - Only companions: a repeater or room server reads plain text from its admin as a command, so chat addressed to one is never sent. Checked on a device: a repeater on the map has no chat option in ATAK.
-  - A sent message waits for the recipient's acknowledgement and is tried up to 3 times with its first timestamp. The path is never reset, since that would write to the radio's contacts. No acknowledgement after 3 tries puts a note in that conversation; so does a refusal.
+  - A sent message waits for the recipient's acknowledgement and is tried up to 3 times with its first timestamp. The path is never reset, since that would write to the radio's contacts. No acknowledgement after 3 tries puts a note in that conversation; so does a refusal. Checked on a device: with the other radio off, the "Not confirmed" note appears.
   - Up to 160 bytes. Held, like channel text, until ATAK connects.
   - A retried copy of a received message (same sender, timestamp and text) is dropped and logged.
 - **No channel echoes** (checked 2026-10-12). A channel message sent from ATAK did not come back: the `Echo check:` log line never appeared. This matches the firmware, which marks its own flooded packets as seen. The guard stays in place: a received channel message matching one just sent from ATAK (`"<radio name>: <text>"`, same channel, within 15 minutes) is dropped and logged.
 - **Never writes to the radio's settings, channels, contacts or clock.**
 
-## Device checks still to do
+## Device check still to do
 
-1. **No acknowledgement:** switch the other radio off and send it a direct message. After about three tries there should be a "Not confirmed" note in the conversation.
-2. **A companion with no position:** a direct message from one should make its contact appear in ATAK at that moment, and a reply to it should work. Not yet possible to test: every contact on the test radio shares a position. A radio with location sharing turned off would do. So would hiding companions in the bridge's node-type filter, which takes them off the map in the same way.
+- **A companion with no position:** a direct message from one should make its contact appear in ATAK at that moment, and a reply to it should work. Not yet possible to test: every contact on the test radio shares a position. A radio with location sharing turned off would do. So would hiding companions in the bridge's node-type filter, which takes them off the map in the same way.
 
 ## Design decisions learned on devices
 
