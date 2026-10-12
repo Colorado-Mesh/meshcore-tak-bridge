@@ -15,7 +15,7 @@ class RadioSession(
     private val context: Context,
     private val address: String,
     private val listener: CompanionClient.Listener,
-    private val onClosed: () -> Unit,
+    private val onClosed: (reason: String) -> Unit,
 ) : GattLink.Events {
     private val link = GattLink(context, this)
     private val client = CompanionClient({ link.send(it) }, listener)
@@ -24,10 +24,11 @@ class RadioSession(
     fun open() {
         val adapter = (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
         if (adapter == null || !adapter.isEnabled) {
-            onClosed("Bluetooth is off")
+            ticker.shutdownNow()
+            onClosed.invoke("Bluetooth is off")
             return
         }
-        BridgeStatus.update { it.copy(radio = "Connecting to radio…", radioBusy = true) }
+        BridgeStatus.update { it.copy(radio = "Connecting to radio…") }
         link.connect(adapter.getRemoteDevice(address))
     }
 
@@ -50,8 +51,7 @@ class RadioSession(
 
     override fun onClosed(reason: String) {
         ticker.shutdownNow()
-        BridgeStatus.update { it.copy(radio = "No radio: $reason", radioBusy = false) }
-        onClosed()
+        onClosed.invoke(reason)
     }
 
     private companion object {

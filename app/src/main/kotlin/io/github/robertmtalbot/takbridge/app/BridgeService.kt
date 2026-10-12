@@ -11,6 +11,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.IBinder
 import io.github.robertmtalbot.takbridge.app.ble.RadioSession
 import io.github.robertmtalbot.takbridge.cot.ClientIdentity
@@ -47,6 +49,16 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
     @Volatile
     private var radio: RadioSession? = null
     private val mesh = MeshPicture()
+    private val main = Handler(Looper.getMainLooper())
+
+    /** The radio the user chose, by Bluetooth address; null when none is chosen. Main thread only. */
+    private var wanted: String? = null
+    private var wantedName = "radio"
+    private var failures = 0
+
+    /** True once the radio has been read and can take messages. */
+    @Volatile
+    private var radioUp = false
 
     /** Channel messages received while ATAK was not there to take them. */
     private val backlog = ArrayList<ChannelMessage>()
@@ -65,24 +77,84 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         startInForeground()
         worker.execute { startServer() }
         when (intent?.action) {
-            ACTION_CONNECT_RADIO -> intent.getStringExtra(EXTRA_ADDRESS)?.let { connectRadio(it) }
-            ACTION_DISCONNECT_RADIO -> radio?.close()
+            ACTION_CONNECT_RADIO -> intent.getStringExtra(EXTRA_ADDRESS)?.let {
+                chooseRadio(it, intent.getStringExtra(EXTRA_NAME) ?: "radio")
+            }
+            ACTION_DISCONNECT_RADIO -> forgetRadio()
+            else -> resumeSavedRadio()
         }
         return START_STICKY
     }
 
-    /** Main thread. Replaces any earlier radio link. */
-    private fun connectRadio(address: String) {
+    private fun prefs() = getSharedPreferences("bridge", Context.MODE_PRIVATE)
+
+    /** The user picked a radio: remember it, and keep it connected until told otherwise. */
+    private fun chooseRadio(address: String, name: String) {
+        prefs().edit().putString(PREF_ADDRESS, address).putString(PREF_NAME, name).apply()
+        if (address != wanted) mesh.clear()
+        wanted = address
+        wantedName = name
+        failures = 0
+        connectRadio(address)
+    }
+
+    /** The user disconnected: stop reconnecting and forget which radio it was. */
+    private fun forgetRadio() {
+        prefs().edit().remove(PREF_ADDRESS).remove(PREF_NAME).apply()
+        wanted = null
+        main.removeCallbacks(retry)
         radio?.close()
+        radio = null
+        radioUp = false
         mesh.clear()
+        BridgeStatus.update { it.copy(radio = "No radio", radioBusy = false) }
+    }
+
+    /** On a plain start, go back to the radio used last time. */
+    private fun resumeSavedRadio() {
+        if (wanted != null) return
+        val address = prefs().getString(PREF_ADDRESS, null) ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
+        ) {
+            BridgeStatus.log("Radio: Bluetooth permission is missing, so the saved radio was not reconnected")
+            return
+        }
+        wanted = address
+        wantedName = prefs().getString(PREF_NAME, null) ?: "radio"
+        failures = 0
+        BridgeStatus.log("Radio: reconnecting to $wantedName, used last time")
+        connectRadio(address)
+    }
+
+    /** Main thread. Opens a link to [address], replacing any earlier one. */
+    private fun connectRadio(address: String) {
+        main.removeCallbacks(retry)
+        radio?.close()
+        BridgeStatus.update { it.copy(radioBusy = true) }
         var session: RadioSession? = null
-        session = RadioSession(applicationContext, address, this) {
-            // Only the current session's end clears the picture; an old one closing late must not.
-            if (radio === session) mesh.clear()
+        session = RadioSession(applicationContext, address, this) { reason ->
+            main.post { if (radio === session) onRadioLost(reason) }
         }
         radio = session
         session.open()
     }
+
+    /**
+     * Main thread. The link ended without the user asking. Keep what is known about the mesh, so
+     * ATAK's picture survives a short gap, and try again after a pause that grows with each failure.
+     */
+    private fun onRadioLost(reason: String) {
+        radio = null
+        radioUp = false
+        if (wanted == null) return
+        val wait = RETRY_SECONDS[failures.coerceAtMost(RETRY_SECONDS.size - 1)]
+        failures++
+        BridgeStatus.update { it.copy(radio = "Lost $wantedName: $reason\nTrying again in $wait s") }
+        main.postDelayed(retry, wait * 1000L)
+    }
+
+    private val retry = Runnable { wanted?.let { connectRadio(it) } }
 
     override fun onLog(message: String) = BridgeStatus.log("Radio: $message")
 
@@ -106,6 +178,8 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
 
     override fun onChannels(channels: List<Channel>) {
         mesh.setChannels(channels)
+        radioUp = true
+        main.post { failures = 0 }
         val names = channels.joinToString { "${it.index}: ${it.name}" }.ifEmpty { "none" }
         BridgeStatus.log("Radio: ${mesh.contactCount} contacts, ${mesh.positionedCount} with a position")
         BridgeStatus.log("Radio: ${channels.size} channels ($names)")
@@ -169,8 +243,11 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
     }
 
     override fun onDestroy() {
+        wanted = null
+        main.removeCallbacks(retry)
         radio?.close()
         radio = null
+        BridgeStatus.update { it.copy(radio = "No radio", radioBusy = false) }
         worker.execute {
             refresher?.shutdownNow()
             refresher = null
@@ -274,6 +351,13 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
     override fun onChat(chat: InboundChat) {
         val now = Instant.now()
         val session = radio
+        if (mesh.hasRadio && (session == null || !radioUp)) {
+            val channel = mesh.channelFor(chat.room, chat.roomId) ?: return
+            BridgeStatus.log("ATAK to mesh, channel ${channel.index}: the radio is not connected; not sent")
+            val note = identity?.let { mesh.notice(channel.index, it, "Not sent: the radio is not connected.", now) }
+            note?.let { server?.send(CotEvents.geoChat(it, now)) }
+            return
+        }
         if (!mesh.hasRadio || session == null) {
             BridgeStatus.log("Chat from ATAK in \"${chat.room}\" (no radio linked): ${chat.text}")
             val reply = DemoData.message("Bridge heard: ${chat.text}", now, room = chat.room, roomId = chat.roomId)
@@ -307,6 +391,12 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         const val ACTION_CONNECT_RADIO = "io.github.robertmtalbot.takbridge.CONNECT_RADIO"
         const val ACTION_DISCONNECT_RADIO = "io.github.robertmtalbot.takbridge.DISCONNECT_RADIO"
         const val EXTRA_ADDRESS = "address"
+        const val EXTRA_NAME = "name"
+        private const val PREF_ADDRESS = "radio_address"
+        private const val PREF_NAME = "radio_name"
+
+        /** Seconds to wait before each reconnection attempt; the last value repeats. */
+        private val RETRY_SECONDS = intArrayOf(3, 5, 10, 20, 30, 60)
         private const val CHANNEL_ID = "bridge-status"
         private const val NOTIFICATION_ID = 1
         private const val REFRESH_MINUTES = 5L

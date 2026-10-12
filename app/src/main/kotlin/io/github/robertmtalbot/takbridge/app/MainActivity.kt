@@ -171,7 +171,9 @@ class MainActivity : Activity() {
         scanner.stop()
         radioList.removeAllViews()
         startForegroundService(
-            serviceIntent().setAction(BridgeService.ACTION_CONNECT_RADIO).putExtra(BridgeService.EXTRA_ADDRESS, radio.address),
+            serviceIntent().setAction(BridgeService.ACTION_CONNECT_RADIO)
+                .putExtra(BridgeService.EXTRA_ADDRESS, radio.address)
+                .putExtra(BridgeService.EXTRA_NAME, radio.name.removeSuffix(" (paired)")),
         )
     }
 
