@@ -239,7 +239,7 @@ Not yet in place: a simulated radio that runs the whole bridge end to end on a c
 | 3. Protocol | Done for what version 1 needs |
 | 4. Nodes on the map | Done, with type and age filters, team colour and icons |
 | 5. Channel chat | Done, with channels as contacts |
-| 5a. Direct messages and echo check | Built and unit-tested; device test pending |
+| 5a. Direct messages and echo check | Direct messages tested both ways on devices; echo check built, device check pending |
 | 6. App shell | Mostly done: radio picker, connection status, map settings, background service |
 | 7. Field test and first release | Not started; needs a signed APK and a settled application ID |
 

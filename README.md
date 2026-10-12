@@ -13,9 +13,11 @@ What works:
 - A local TAK server for ATAK on `127.0.0.1:8087`, plain TCP, loopback only, one client.
 - A Bluetooth link to a MeshCore companion radio, with every step queued and time-limited, PIN pairing, and automatic reconnection to the radio chosen last time.
 - Every node that shares a position as an ATAK marker: companions as team members in a team colour you choose, repeaters and room servers as installations (optionally with an icon from an ATAK icon set), sensors as sensors. Filters by node type and by how recently a node was heard.
-- Every channel on the radio as an ATAK contact, two-way: channel text arrives as messages from that contact, and a message you send to it goes out on that channel.- Never writes to the radio's settings, channels, contacts or clock.
+- Every channel on the radio as an ATAK contact, two-way: channel text arrives as messages from that contact, and a message you send to it goes out on that channel.
+- Direct messages with companion nodes, both ways, through each node's ATAK contact, with acknowledgement and up to 3 tries.
+- Never writes to the radio's settings, channels, contacts or clock.
 
-New and not yet tested on a device: direct messages with companion nodes, both ways, with acknowledgement and up to 3 tries; and a logged check that a channel message sent from ATAK never shows twice.
+New and not yet tested on a device: a logged check that a channel message sent from ATAK never shows twice.
 
 Not yet: a signed release APK, the radio's battery in ATAK.
 
@@ -26,10 +28,11 @@ Not yet: a signed release APK, the radio's battery in ATAK.
 3. Tap **Scan for radios**, then tap your radio. Enter its PIN if Android asks to pair. The app remembers the radio and reconnects to it on its own.
 4. In ATAK, open Settings, Network Preferences, TAK Servers, and add a server with address `127.0.0.1`, port `8087`, protocol TCP. Leave SSL/TLS off.
 5. Mesh nodes with a position appear on the map. Each channel appears in ATAK's contacts (`Public`, `#name` for hashtag channels, a lock for private channels), with an opening line in its chat. Messages you send to a channel contact go out over the radio under the radio's name.
-
 6. To message a person directly, open the contact of their companion node in ATAK and chat with it. Messages from them arrive the same way. A companion with no position appears in ATAK's contacts once a message has passed between you. Repeaters and room servers cannot be messaged.
 
 Messages longer than the mesh allows are not sent: about 133 bytes on a channel, less the radio's name, and 160 bytes direct. The bridge says so in the chat instead. A direct message that is never acknowledged after 3 tries gets a note in its conversation.
+
+If direct messages fail both ways while channels work, a radio probably holds a stale contact for the other. Each try is logged as "flooded", and no "Mesh, direct from" line ever appears. Send a flood advert from each radio so they re-learn each other's keys, then try again.
 
 With no radio connected the bridge serves three demo markers in central Denver and a chat contact that echoes what you send, which is useful for checking the ATAK side alone.
 

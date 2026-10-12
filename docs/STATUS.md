@@ -19,32 +19,32 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
   - Names: `#name` for hashtag channels, a lock for private channels, plain `Public` for the default channel.
   - The kind is worked out by comparing the channel key with the Public key and the key a hashtag name gives; the key is never stored.
   - Channel text arrives as messages from that contact; a message sent to it goes out on that channel. Messages received before ATAK connects are held (up to 50).
-- **Never writes to the radio's settings, channels, contacts or clock.**
-
-## Built, not yet tested on a device
-
-- **Direct messages** between the ATAK user and companion nodes, both ways.
+- **Direct messages** between the ATAK user and companion nodes, both ways, with acknowledgements logged as delivered (tested 2026-10-12).
   - Companions on the map are reachable ATAK contacts. A companion with no position becomes a contact at 0, 0 once a direct message has passed with it.
   - Only companions: a repeater or room server reads plain text from its admin as a command, so chat addressed to one is never sent.
   - A sent message waits for the recipient's acknowledgement and is tried up to 3 times with its first timestamp. The path is never reset, since that would write to the radio's contacts. No acknowledgement after 3 tries puts a note in that conversation; so does a refusal.
   - Up to 160 bytes. Held, like channel text, until ATAK connects.
   - A retried copy of a received message (same sender, timestamp and text) is dropped and logged.
+- **Never writes to the radio's settings, channels, contacts or clock.**
+
+## Built, not yet tested on a device
+
 - **Echo check for channels.** A channel message received with the same channel and text as one just sent from ATAK (`"<radio name>: <text>"`, within 15 minutes) is dropped and logged as `Echo check: …`.
   - None is expected. The firmware marks its own flooded packets as seen, so a repeater's rebroadcast is ignored, and sending never produces a received frame.
 
-### Device test for these
+### Device checks still to do
 
-1. Pair the bridge's radio and a second radio running the standard MeshCore app. Put both near a repeater, and the second one far enough away that its traffic goes through the repeater if possible.
-2. **Direct, mesh to ATAK:** from the second radio, message the bridge's radio. It should appear in ATAK from that node's contact. If the node has no position, its contact should appear in ATAK's contact list at that moment.
-3. **Direct, ATAK to mesh:** reply in that conversation. The second radio should show it, and the bridge log should show `delivered`. Switch the second radio off and send again: after about three tries there should be a "Not confirmed" note in the conversation.
+1. **Echo:** with a repeater in range, send several messages on Public and on a hashtag channel from ATAK. Each should show once in ATAK. Look in the bridge's log for `Echo check:`. If it never appears, echoes do not happen, and that result should be recorded here.
+2. **No acknowledgement:** switch the other radio off and send it a direct message. After about three tries there should be a "Not confirmed" note in the conversation.
+3. **A companion with no position:** a direct message from one should make its contact appear in ATAK at that moment, and a reply to it should work.
 4. **A repeater is safe:** a repeater on the map should have no chat option in ATAK.
-5. **Echo:** send several messages on Public and on a hashtag channel from ATAK. Each should show once in ATAK. Look in the bridge's log for `Echo check:`. If it never appears, echoes do not happen, and that result should be recorded here.
 
 ## Design decisions learned on devices
 
 - **Channels are contacts, not GeoChat rooms.** ATAK only sends chat to a contact it can reach (`<contact endpoint="*:-1:stcp">`), and it addresses a reply to that contact, not to the room it was read in. With rooms, the bridge could not tell which channel a reply was for.
 - **Bind to 127.0.0.1 explicitly.** `InetAddress.getLoopbackAddress()` is `::1` on Android, and ATAK refused to connect to it.
 - **Events are bare `<event>` elements** with no XML declaration, and pings get `t-x-c-t-r` pongs.
+- **Stale contacts break direct messages silently, in both directions.** Channels share a key, so they keep working. A direct message is encrypted between the two nodes' own keys, so if either radio holds an old contact for the other, nothing gets through. The signs in the log are that every try is "flooded" (no path is ever learned) and no "Mesh, direct from" line appears. A flood advert from each radio fixed it in the first test. The bridge itself does not advert, since that is a radio action the user should choose.
 
 ## How work is delivered
 
@@ -53,7 +53,7 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
 
 ## Still to do
 
-1. Run the device test above for direct messages and the echo check, and record the results.
+1. Run the device checks above and record the results.
 2. A signed release APK and a settled application ID (currently `io.github.robertmtalbot.takbridge`).
 3. Possibly: ATAK delivery receipts (`b-t-f-d`) for acknowledged direct messages, so ATAK shows them as delivered; and room server posts, which arrive as signed messages and are skipped for now.
 4. Later: radio battery in ATAK, and moving the repository to Colorado Mesh if they agree.
