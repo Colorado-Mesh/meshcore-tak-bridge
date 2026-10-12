@@ -263,11 +263,6 @@ class MeshPicture {
         else -> "node"
     }
 
-    /** One line per channel so its conversation exists in ATAK. The fixed id makes ATAK keep only one copy. */
-    fun openers(atak: ClientIdentity, now: Instant): List<ChatSpec> = rooms.map { (name, channel) ->
-        line(channel.index, name, atak, "Mesh channel \"$name\" is linked. Messages sent here go out over the radio.", now, "open-${name.hashCode()}")
-    }
-
     /** A received channel message as a line from its channel's contact, or null when the channel is not known. */
     fun chatLine(message: ChannelMessage, atak: ClientIdentity): ChatSpec? {
         val name = nameFor(message.channelIndex) ?: return null

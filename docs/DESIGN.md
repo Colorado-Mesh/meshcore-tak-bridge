@@ -140,7 +140,7 @@ So every channel is a contact:
 
 - Its uid is `MESHCORE-CH-<slot>`, with endpoint `*:-1:stcp`. A contact must have a point, so it sits at 0, 0, away from any map in use.
 - Its callsign starts with `#` and shows the channel's kind: `#Public`, `#name` for a hashtag channel, and `#🔒 name` for a private channel. ATAK lists contacts alphabetically. `#` sorts before digits and letters, so all channels sit together at the top, ahead of the nodes. The lock sorts after letters, so private channels follow the others within that group. Channels that share a name get their slot number added.
-- When ATAK connects, the bridge posts one opening line from each channel contact so its conversation exists in ATAK's chat.
+- The bridge posts nothing in a channel's chat until there is a message. The first version posted an opening line from each channel contact on every connect, so the conversation would exist in ATAK. Testing showed a reachable contact is enough to open a chat, and the opening lines marked every channel as unread each time ATAK connected, so they were removed.
 - A channel message heard on the mesh arrives as a direct message from that channel's contact to the ATAK user. The mesh sender's name stays in the text, in the `Name: text` form MeshCore uses.
 - A message the ATAK user sends to a channel contact is matched to its channel by the contact uid (or, failing that, the callsign) and sent once on that channel, under the radio's own name.
 - Messages heard before ATAK connects and identifies itself are held, up to 50, and delivered when it does.

@@ -290,14 +290,16 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         mesh.notice(channelIndex, atak, "Not sent to the mesh: ${text.take(40)}", now)?.let { server?.send(CotEvents.geoChat(it, now)) }
     }
 
-    /** Everything ATAK should see for the linked radio: markers, a line to open each channel, and held chat. */
+    /**
+     * Everything ATAK should see for the linked radio: markers and contacts, then held chat.
+     * No greeting line is posted in each channel: a reachable contact is enough to open its
+     * chat, and a greeting on every connect marked every channel as unread.
+     */
     private fun sendPicture() {
         val active = server ?: return
         if (!active.hasClient) return
         sendMeshMarkers(active)
         val atak = identity ?: return
-        val now = Instant.now()
-        for (opener in mesh.openers(atak, now)) active.send(CotEvents.geoChat(opener, now))
         val held = synchronized(backlog) { ArrayList(backlog).also { backlog.clear() } }
         for (message in held) deliver(message, atak)
     }
