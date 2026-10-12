@@ -14,8 +14,8 @@ import java.net.Socket
  * server groups" when they fail. [respond] lists what is answered; every answer is empty. The
  * contacts and channels themselves reach ATAK through the CoT stream.
  *
- * No reply has a `version` field. ATAK reads the server's API version from it, and the bridge
- * should not claim to support an API it does not provide. Any other request gets 404, and its
+ * The contact-list reply has no `version` field. ATAK reads the server's API version from it,
+ * and the bridge should not claim to support an API it does not provide. Any other request gets 404, and its
  * path is reported once to [onUnknownPath] so that a device test shows what else ATAK wants.
  *
  * Loopback only, plain HTTP, one short request per connection.
@@ -121,6 +121,15 @@ class ApiServer(
         /** The JSON type ATAK checks for in a group-list reply. */
         const val GROUP_LIST_TYPE = "com.bbn.marti.remote.groups.Group"
 
+        /**
+         * An empty list of Data Sync missions, which newer ATAK shows as "feeds". This is TAK
+         * Server's own wrapper for the list. Its `version` is the wrapper's format version, which
+         * TAK Server includes on every mission reply. It is not the server's API version, which
+         * ATAK reads only from the contact list.
+         */
+        internal const val MISSION_LIST =
+            "{\"version\":\"3\",\"type\":\"Mission\",\"data\":[],\"nodeId\":\"meshcore-tak-bridge\"}"
+
         internal const val OK = "200 OK"
         internal const val NO_CONTENT = "204 No Content"
         internal const val NOT_FOUND = "404 Not Found"
@@ -135,6 +144,7 @@ class ApiServer(
          * requests ATAK makes on its own whenever it connects to a server:
          * - the server's contacts: an empty list;
          * - the server's groups (ATAK's Channels feature): an empty list, which ATAK accepts;
+         * - the server's Data Sync missions ("feeds" in newer ATAK): an empty list;
          * - a device or tool profile: 204, which ATAK reads as "nothing new", not as an error.
          *
          * The server version is not answered: ATAK only logs that failure, and an answer would
@@ -146,6 +156,7 @@ class ApiServer(
             return when {
                 clean == "/Marti/api/clientEndPoints" -> OK to "{\"type\":\"$CLIENT_LIST_TYPE\",\"data\":[]}"
                 clean == "/Marti/api/groups/all" -> OK to "{\"type\":\"$GROUP_LIST_TYPE\",\"data\":[]}"
+                clean == "/Marti/api/missions" -> OK to MISSION_LIST
                 clean.startsWith("/Marti/api/device/profile/") -> NO_CONTENT to ""
                 else -> NOT_FOUND to "{}"
             }

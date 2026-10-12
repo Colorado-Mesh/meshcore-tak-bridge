@@ -42,7 +42,7 @@ class ApiServerTest {
     }
 
     @Test
-    fun claimsNoApiVersion() {
+    fun claimsNoApiVersionWhereAtakReadsOne() {
         for (path in listOf("/Marti/api/clientEndPoints", "/Marti/api/groups/all")) {
             assertTrue(!ApiServer.respond("GET", path).second.contains("version"))
         }
@@ -56,6 +56,16 @@ class ApiServerTest {
         val reply = request(port, "/Marti/api/groups/all?useCache=true")
         assertTrue(reply, reply.startsWith("HTTP/1.1 200 OK"))
         assertEquals("{\"type\":\"com.bbn.marti.remote.groups.Group\",\"data\":[]}", reply.substringAfter("\r\n\r\n"))
+    }
+
+    @Test
+    fun answersTheFeedsRequestWithAnEmptyMissionList() {
+        val port = server.start()
+        val reply = request(port, "/Marti/api/missions")
+        assertTrue(reply, reply.startsWith("HTTP/1.1 200 OK"))
+        val body = reply.substringAfter("\r\n\r\n")
+        assertTrue(body, body.contains("\"type\":\"Mission\"") && body.contains("\"data\":[]"))
+        assertTrue(unknown.isEmpty())
     }
 
     @Test
