@@ -34,6 +34,7 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
 - **Bind to 127.0.0.1 explicitly.** `InetAddress.getLoopbackAddress()` is `::1` on Android, and ATAK refused to connect to it.
 - **Events are bare `<event>` elements** with no XML declaration, and pings get `t-x-c-t-r` pongs.
 - **Stale contacts break direct messages silently, in both directions.** Channels share a key, so they keep working. A direct message is encrypted between the two nodes' own keys, so if either radio holds an old contact for the other, nothing gets through. The signs in the log are that every try is "flooded" (no path is ever learned) and no "Mesh, direct from" line appears. A flood advert from each radio fixed it in the first test. The bridge itself does not advert, since that is a radio action the user should choose.
+- **Android silently ignores frequent Bluetooth scans.** An app that starts more than five scans in 30 seconds gets scans that report nothing, with no error. Combined with a scan button that gave no feedback, this made it seem to need two or three taps. The button now shows that a scan is running, and a second tap stops the scan instead of restarting it. The scanner also counts its starts and says how long to wait.
 
 ## How work is delivered
 
