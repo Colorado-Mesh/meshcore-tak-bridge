@@ -342,7 +342,7 @@ class MainActivity : Activity() {
             2. In ATAK open Settings, Network Preferences, TAK Servers, and add a server.
             3. Address 127.0.0.1, port ${TakServer.DEFAULT_PORT}, protocol TCP. Leave SSL/TLS off.
             4. Mesh nodes that share a position appear on the map, and each radio channel
-               appears in ATAK's contacts as "Mesh: <channel name>". Messages sent to that
+               appears in ATAK's contacts as "#<channel name>". Messages sent to that
                contact go out on that channel.
             The bridge reads from the radio and sends channel messages. It never changes
             the radio's settings or channels.

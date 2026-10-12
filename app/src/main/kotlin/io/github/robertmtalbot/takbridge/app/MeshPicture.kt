@@ -90,7 +90,8 @@ class MeshPicture {
 
     private fun uidFor(channelIndex: Int) = "MESHCORE-CH-$channelIndex"
 
-    private fun callsign(channelName: String) = "Mesh: $channelName"
+    /** `#Public`, as MeshCore writes hashtag channels; a name that already starts with # keeps its one. */
+    private fun callsign(channelName: String) = if (channelName.startsWith("#")) channelName else "#$channelName"
 
     /** The most text ATAK may send on a channel: the radio puts its own name and ": " in front. */
     fun maxTextBytes(): Int {
