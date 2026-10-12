@@ -17,8 +17,6 @@ What works:
 - Direct messages with companion nodes, both ways, through each node's ATAK contact, with acknowledgement and up to 3 tries.
 - Never writes to the radio's settings, channels, contacts or clock.
 
-New and not yet tested on a device: a logged check that a channel message sent from ATAK never shows twice.
-
 Not yet: a signed release APK, the radio's battery in ATAK.
 
 ## Try it

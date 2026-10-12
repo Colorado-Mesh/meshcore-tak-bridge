@@ -25,19 +25,14 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
   - A sent message waits for the recipient's acknowledgement and is tried up to 3 times with its first timestamp. The path is never reset, since that would write to the radio's contacts. No acknowledgement after 3 tries puts a note in that conversation; so does a refusal.
   - Up to 160 bytes. Held, like channel text, until ATAK connects.
   - A retried copy of a received message (same sender, timestamp and text) is dropped and logged.
+- **No channel echoes** (checked 2026-10-12). A channel message sent from ATAK did not come back: the `Echo check:` log line never appeared. This matches the firmware, which marks its own flooded packets as seen. The guard stays in place: a received channel message matching one just sent from ATAK (`"<radio name>: <text>"`, same channel, within 15 minutes) is dropped and logged.
 - **Never writes to the radio's settings, channels, contacts or clock.**
 
-## Built, not yet tested on a device
+## Device checks still to do
 
-- **Echo check for channels.** A channel message received with the same channel and text as one just sent from ATAK (`"<radio name>: <text>"`, within 15 minutes) is dropped and logged as `Echo check: …`.
-  - None is expected. The firmware marks its own flooded packets as seen, so a repeater's rebroadcast is ignored, and sending never produces a received frame.
-
-### Device checks still to do
-
-1. **Echo:** with a repeater in range, send several messages on Public and on a hashtag channel from ATAK. Each should show once in ATAK. Look in the bridge's log for `Echo check:`. If it never appears, echoes do not happen, and that result should be recorded here.
-2. **No acknowledgement:** switch the other radio off and send it a direct message. After about three tries there should be a "Not confirmed" note in the conversation.
-3. **A companion with no position:** a direct message from one should make its contact appear in ATAK at that moment, and a reply to it should work.
-4. **A repeater is safe:** a repeater on the map should have no chat option in ATAK.
+1. **No acknowledgement:** switch the other radio off and send it a direct message. After about three tries there should be a "Not confirmed" note in the conversation.
+2. **A companion with no position:** a direct message from one should make its contact appear in ATAK at that moment, and a reply to it should work.
+3. **A repeater is safe:** a repeater on the map should have no chat option in ATAK.
 
 ## Design decisions learned on devices
 

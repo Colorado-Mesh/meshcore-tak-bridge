@@ -239,7 +239,7 @@ Not yet in place: a simulated radio that runs the whole bridge end to end on a c
 | 3. Protocol | Done for what version 1 needs |
 | 4. Nodes on the map | Done, with type and age filters, team colour and icons |
 | 5. Channel chat | Done, with channels as contacts |
-| 5a. Direct messages and echo check | Direct messages tested both ways on devices; echo check built, device check pending |
+| 5a. Direct messages and echo check | Done; direct messages tested both ways, no channel echoes seen |
 | 6. App shell | Mostly done: radio picker, connection status, map settings, background service |
 | 7. Field test and first release | Not started; needs a signed APK and a settled application ID |
 
@@ -254,9 +254,10 @@ Settled by testing on devices:
 - [x] **Will Android keep the bridge running?** Yes on both test devices, including overnight on the Tab Active 3.
 - [x] **Does pairing work across devices?** Yes on both test devices, with the PIN prompt and the packet size request allowed to go unanswered.
 
+- [x] **Does a sent channel message ever come back, so that it shows twice in ATAK?** No. The firmware source says not (see "Echoes"), and the bridge's echo log never fired in testing on 12 October 2026. The guard stays as a safety net.
+
 Still open:
 
-- [ ] **Does a sent channel message ever come back, so that it shows twice in ATAK?** The firmware source says not (see "Echoes"). The bridge logs and drops any that do, and the device test in STATUS.md will confirm it with a repeater in range.
 - [ ] **Do ATAK's delivery receipts work through this server?** Sending `b-t-f-d` for acknowledged direct messages would show them as delivered in ATAK, but has not been tried.
 - [ ] **Which undocumented protocol details are stable?** The contact record and advert layouts come from firmware source, not the published page, and may change between firmware versions.
 - [ ] **Should the phone's position be shared to the mesh?** It would mean writing the radio's advertised location, which conflicts with the rule of never changing radio settings.
