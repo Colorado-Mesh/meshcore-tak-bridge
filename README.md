@@ -51,7 +51,7 @@ Every push to `main` runs the tests and builds the debug APK in GitHub Actions.
 | --- | --- |
 | `protocol` | MeshCore companion protocol: frame encoding and decoding, and the client that runs the conversation with the radio one command at a time. Plain Kotlin. |
 | `cot` | The Cursor on Target events ATAK exchanges: markers, contacts, GeoChat, deletes, ping and pong, and the stream framer. Plain Kotlin. |
-| `takserver` | The loopback TCP server: one client, keepalive replies, inbound chat, rate limit. Plain Kotlin. |
+| `takserver` | The loopback TCP server: one client, keepalive replies, inbound chat, rate limit. Also a minimal web API answer on port 8080, so ATAK's poll for server contacts does not fail. Plain Kotlin. |
 | `app` | The Android app: the Bluetooth link (`ble/`), the mesh-to-ATAK mapping (`MeshPicture`), the foreground service that ties them together, and the status and settings screen. |
 
 The plain-Kotlin modules have JUnit tests. The app is built in code with no layout resources.

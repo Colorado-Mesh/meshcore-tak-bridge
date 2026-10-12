@@ -27,6 +27,7 @@ import io.github.robertmtalbot.takbridge.protocol.DeviceInfo
 import io.github.robertmtalbot.takbridge.protocol.DirectMessage
 import io.github.robertmtalbot.takbridge.protocol.DirectOutcome
 import io.github.robertmtalbot.takbridge.protocol.SelfInfo
+import io.github.robertmtalbot.takbridge.takserver.ApiServer
 import io.github.robertmtalbot.takbridge.takserver.TakServer
 import io.github.robertmtalbot.takbridge.takserver.TakServerListener
 import java.io.IOException
@@ -50,6 +51,9 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
 
     @Volatile
     private var server: TakServer? = null
+
+    /** Answers ATAK's poll for server contacts; worker thread only. */
+    private var api: ApiServer? = null
     private var refresher: ScheduledExecutorService? = null
     @Volatile
     private var radio: RadioSession? = null
@@ -345,6 +349,8 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
             refresher = null
             server?.stop()
             server = null
+            api?.stop()
+            api = null
             BridgeStatus.update { it.copy(running = false, clientConnected = false) }
             BridgeStatus.log("Bridge stopped")
         }
@@ -381,6 +387,22 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         }
     }
 
+    /**
+     * Runs on [worker]. The answer to ATAK's contact-list poll on port 8080; see [ApiServer].
+     * Not essential: if another app holds the port, the bridge still works, and ATAK only shows
+     * its "Failed to get server contacts" message.
+     */
+    private fun startApi() {
+        if (api != null) return
+        val created = ApiServer { request -> BridgeStatus.log("ATAK asked the web API for $request; not provided") }
+        try {
+            created.start()
+            api = created
+        } catch (e: IOException) {
+            BridgeStatus.log("Web API port ${ApiServer.DEFAULT_PORT} is in use (${e.message}); ATAK may say it cannot get server contacts")
+        }
+    }
+
     /** Runs on [worker]. */
     private fun startServer() {
         if (server != null) return
@@ -395,6 +417,7 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
             stopSelf()
             return
         }
+        startApi()
         // A marker goes stale in ATAK after ten minutes, so re-send well inside that.
         refresher = Executors.newSingleThreadScheduledExecutor().also {
             it.scheduleWithFixedDelay({ sendMarkers() }, REFRESH_MINUTES, REFRESH_MINUTES, TimeUnit.MINUTES)

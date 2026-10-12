@@ -125,7 +125,7 @@ The server speaks Cursor on Target (CoT) XML. Each behaviour below was found nec
 
 The bridge learns who the ATAK user is (callsign and uid) from the first position report ATAK sends, because chat is addressed to that user.
 
-ATAK also makes web requests to a TAK server's API port for things like version and data packages. The bridge does not provide that, and the resulting errors in ATAK are harmless.
+ATAK also polls a TAK server's web API on port 8080. With nothing listening, it kept showing "Failed to get server contacts … connection to http://127.0.0.1:8080 refused". The bridge now runs a minimal responder on `127.0.0.1:8080` (`ApiServer`) that answers only that poll, `GET /Marti/api/clientEndPoints`. The reply is an empty list in the form ATAK's `GetClientListOperation` parses: `{"type":"com.bbn.marti.remote.ClientEndpoint","data":[]}`. The contacts themselves still arrive over the CoT stream. The reply leaves out the `version` field, which ATAK reads as the server's API version, so the bridge does not claim an API it lacks. Anything else gets 404, and the bridge logs each such path once, so a device test shows whether ATAK wants more. If another app holds port 8080, the bridge carries on without it.
 
 Setting up ATAK is one step: add a server with address `127.0.0.1`, port `8087`, protocol TCP.
 
@@ -192,7 +192,7 @@ A channel message sent from ATAK should never come back to ATAK. The firmware ma
 
 The app's exposure is small because nothing leaves the phone except what the radio transmits.
 
-- **Loopback only.** The TAK server binds to `127.0.0.1`, so no other device on a network can reach it. Other apps on the same phone can, which is why the server accepts a single client and the app shows when one is connected.
+- **Loopback only.** The TAK server binds to `127.0.0.1`, and so does the web API responder on port 8080, so no other device on a network can reach either. The responder holds no data: it only ever answers with an empty contact list. Other apps on the same phone can, which is why the server accepts a single client and the app shows when one is connected.
 - **Transmitting is the user's own act.** Only messages the user sends to a channel or companion contact are transmitted, from the user's own radio. Retries of an unacknowledged direct message are the only transmissions the bridge repeats on its own, and they stop after 3 tries.
 - **No commands to infrastructure.** Chat is never sent to a repeater or room server, which could read it as an admin command.
 - **No configuration writes.** The app cannot alter channels, keys, contacts, the clock or radio settings. Channel keys are read only to classify the channel and are not kept.
@@ -209,7 +209,7 @@ The app is written in Kotlin, split so that most of the logic is plain code with
 | --- | --- | --- |
 | `protocol` | MeshCore companion frames, and the client that runs the command queue | No |
 | `cot` | Build and parse CoT events: markers, contacts, GeoChat, deletes, ping and pong; stream framing | No |
-| `takserver` | Loopback TCP server, inbound chat, rate limit | No |
+| `takserver` | Loopback TCP server, inbound chat, rate limit; minimal web API answer on port 8080 | No |
 | `app` | Bluetooth link and scanner (`ble/`), the mesh picture, the foreground service, the status and settings screen | Yes |
 
 The proposal had separate `bridge` and `ble` modules. In practice the mapping (`MeshPicture`) and the Bluetooth code sit in `app`; the mapping could move into a plain module if it grows tests of its own.
