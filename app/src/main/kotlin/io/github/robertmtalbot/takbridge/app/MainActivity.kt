@@ -248,52 +248,99 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Lets the user give repeaters and room servers an icon from an icon set installed in ATAK. */
+    /** Icons for repeaters and room servers, and the team colour companions are drawn in. */
     private fun iconSection(pad: Int): LinearLayout {
         val prefs = getSharedPreferences(BridgeService.PREFS, MODE_PRIVATE)
+        val section = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, pad, 0, 0)
+        }
+        section.addView(iconRow("Repeater icon (optional)", "Repeaters", BridgeService.PREF_RELAY_ICON))
+        section.addView(iconRow("Room server icon (optional)", "Room servers", BridgeService.PREF_ROOM_ICON))
+        section.addView(
+            TextView(this).apply {
+                textSize = 12f
+                text = "Icons come from an icon set installed in ATAK. Leave a field empty for the standard installation symbol."
+            },
+        )
+
+        val teams = MeshPicture.TEAM_COLOURS
+        val current = prefs.getString(BridgeService.PREF_COMPANION_TEAM, MeshPicture.DEFAULT_COMPANION_TEAM)
+        val spinner = Spinner(this).apply {
+            adapter = ArrayAdapter(context, android.R.layout.simple_spinner_dropdown_item, teams)
+            setSelection(teams.indexOf(current).coerceAtLeast(0))
+            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                    val team = teams[position]
+                    if (team == prefs.getString(BridgeService.PREF_COMPANION_TEAM, MeshPicture.DEFAULT_COMPANION_TEAM)) return
+                    prefs.edit().putString(BridgeService.PREF_COMPANION_TEAM, team).apply()
+                    BridgeStatus.log("Companions will show as $team team members")
+                    applyMapSettings()
+                }
+
+                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+            }
+        }
+        section.addView(
+            LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(0, pad / 2, 0, 0)
+                addView(TextView(context).apply { text = "Companion team colour" })
+                addView(spinner)
+            },
+        )
+        return section
+    }
+
+    /**
+     * One icon setting: a path field with Save, and a list of icons from the GeoOps set that
+     * fills the field and saves in one step, so a choice cannot be left unsaved.
+     */
+    private fun iconRow(title: String, kind: String, prefKey: String): LinearLayout {
+        val prefs = getSharedPreferences(BridgeService.PREFS, MODE_PRIVATE)
         val field = EditText(this).apply {
-            setText(prefs.getString(BridgeService.PREF_RELAY_ICON, ""))
+            setText(prefs.getString(prefKey, ""))
             hint = "icon set UID/group/file name"
             textSize = 13f
             isSingleLine = true
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
         }
-        val save = Button(this).apply {
-            text = "Save icon"
-            setOnClickListener {
-                val path = field.text.toString().trim()
-                if (path.isNotEmpty() && !MeshPicture.isIconPath(path)) {
-                    BridgeStatus.log("Icon not saved: it must be icon set UID/group/file name")
-                    return@setOnClickListener
+        fun save() {
+            val path = field.text.toString().trim()
+            if (path.isNotEmpty() && !MeshPicture.isIconPath(path)) {
+                BridgeStatus.log("Icon not saved: it must be icon set UID/group/file name")
+                return
+            }
+            prefs.edit().putString(prefKey, path).apply()
+            BridgeStatus.log(if (path.isEmpty()) "$kind will use the installation symbol" else "$kind icon saved")
+            applyMapSettings()
+        }
+        val saveButton = Button(this).apply {
+            text = "Save"
+            setOnClickListener { save() }
+        }
+        val presets = listOf("GeoOps icon…") + MeshPicture.GEOOPS_ICONS.keys
+        val presetSpinner = Spinner(this).apply {
+            adapter = ArrayAdapter(context, android.R.layout.simple_spinner_dropdown_item, presets)
+            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                    if (position == 0) return
+                    field.setText(MeshPicture.GEOOPS_ICONS.getValue(presets[position]))
+                    save()
+                    setSelection(0)
                 }
-                prefs.edit().putString(BridgeService.PREF_RELAY_ICON, path).apply()
-                BridgeStatus.log(if (path.isEmpty()) "Repeaters will use the installation symbol" else "Repeater icon saved")
-                applyMapSettings()
+
+                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
             }
-        }
-        val geoOps = Button(this).apply {
-            text = "Use GeoOps Repeater"
-            isAllCaps = false
-            // Fills the field and saves in one step, so the choice cannot be left unsaved.
-            setOnClickListener {
-                field.setText(MeshPicture.GEOOPS_REPEATER_ICON)
-                save.performClick()
-            }
-        }
-        val buttons = LinearLayout(this).apply {
-            addView(save)
-            addView(geoOps)
         }
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, pad, 0, 0)
-            addView(TextView(context).apply { text = "Icon for repeaters and room servers (optional)" })
+            addView(TextView(context).apply { text = title })
             addView(field, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
-            addView(buttons)
             addView(
-                TextView(context).apply {
-                    textSize = 12f
-                    text = "The icon set must be installed in ATAK. Leave empty for the standard installation symbol."
+                LinearLayout(context).apply {
+                    addView(saveButton)
+                    addView(presetSpinner)
                 },
             )
         }

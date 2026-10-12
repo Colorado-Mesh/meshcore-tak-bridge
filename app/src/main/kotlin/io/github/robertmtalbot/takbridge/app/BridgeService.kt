@@ -100,6 +100,9 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
     private fun loadStyle() {
         val prefs = prefs()
         mesh.relayIconPath = prefs.getString(PREF_RELAY_ICON, null)?.takeIf { MeshPicture.isIconPath(it) }
+        mesh.roomIconPath = prefs.getString(PREF_ROOM_ICON, null)?.takeIf { MeshPicture.isIconPath(it) }
+        mesh.companionTeam = prefs.getString(PREF_COMPANION_TEAM, null)
+            ?.takeIf { it in MeshPicture.TEAM_COLOURS } ?: MeshPicture.DEFAULT_COMPANION_TEAM
         mesh.shownTypes = prefs.getStringSet(PREF_SHOWN_TYPES, null)
             ?.mapNotNull { it.toIntOrNull() }?.toSet() ?: MeshPicture.ALL_TYPES
         val hours = prefs.getInt(PREF_MAX_AGE_HOURS, DEFAULT_MAX_AGE_HOURS)
@@ -435,6 +438,8 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         const val ACTION_RELOAD_STYLE = "io.github.robertmtalbot.takbridge.RELOAD_STYLE"
         const val PREFS = "bridge"
         const val PREF_RELAY_ICON = "relay_icon"
+        const val PREF_ROOM_ICON = "room_icon"
+        const val PREF_COMPANION_TEAM = "companion_team"
         const val PREF_SHOWN_TYPES = "shown_types"
         const val PREF_MAX_AGE_HOURS = "max_age_hours"
 

@@ -37,6 +37,14 @@ class MeshPicture {
     @Volatile
     var relayIconPath: String? = null
 
+    /** Icon for room servers, in the same form as [relayIconPath]. */
+    @Volatile
+    var roomIconPath: String? = null
+
+    /** ATAK team colour companions are drawn in; one of [TEAM_COLOURS]. */
+    @Volatile
+    var companionTeam: String = DEFAULT_COMPANION_TEAM
+
     /** Node types to put on the map, as `Contact.TYPE_` values. Kinds this app does not know always show. */
     @Volatile
     var shownTypes: Set<Int> = ALL_TYPES
@@ -140,8 +148,12 @@ class MeshPicture {
                     callsign = contact.name.ifEmpty { contact.publicKeyHex.take(8) },
                     latitude = contact.latitude,
                     longitude = contact.longitude,
-                    iconsetPath = relayIconPath.takeIf { contact.type == Contact.TYPE_REPEATER || contact.type == Contact.TYPE_ROOM_SERVER },
-                    team = if (companion) "Cyan" else null,
+                    iconsetPath = when (contact.type) {
+                        Contact.TYPE_REPEATER -> relayIconPath
+                        Contact.TYPE_ROOM_SERVER -> roomIconPath
+                        else -> null
+                    },
+                    team = if (companion) companionTeam else null,
                     role = if (companion) "Team Member" else null,
                     remarks = "MeshCore ${kind(contact.type)}, last advert ${TIME.format(Instant.ofEpochSecond(contact.lastAdvert))} UTC",
                 ),
@@ -201,8 +213,26 @@ class MeshPicture {
         val ALL_TYPES: Set<Int> =
             setOf(Contact.TYPE_COMPANION, Contact.TYPE_REPEATER, Contact.TYPE_ROOM_SERVER, Contact.TYPE_SENSOR)
 
-        /** The Repeater icon in the GeoOps icon set's WildFire group. */
-        const val GEOOPS_REPEATER_ICON = "83198b4872a8c34eb9c549da8a4de5a28f07821185b39a2277948f66c24ac17a/WildFire/Repeater.png"
+        /** The uid of the GeoOps icon set. */
+        private const val GEOOPS_SET = "83198b4872a8c34eb9c549da8a4de5a28f07821185b39a2277948f66c24ac17a"
+
+        /** A few GeoOps WildFire icons that suit radio sites, by the name the set gives each. */
+        val GEOOPS_ICONS: Map<String, String> = listOf(
+            "Repeater",
+            "Repeater Mobile Relay",
+            "Internet Access",
+            "Telephone",
+            "Lookout",
+            "Incident Command Post",
+            "Ranger Station",
+        ).associateWith { "$GEOOPS_SET/WildFire/$it.png" }
+
+        /** The team colours ATAK offers. */
+        val TEAM_COLOURS = listOf(
+            "White", "Yellow", "Orange", "Magenta", "Red", "Maroon", "Purple",
+            "Dark Blue", "Blue", "Cyan", "Teal", "Green", "Dark Green", "Brown",
+        )
+        const val DEFAULT_COMPANION_TEAM = "Cyan"
         private const val MAX_ICON_PATH = 256
 
         /** True for `<set uid>/<group>/<file>` with nothing that could break out of an XML attribute. */
