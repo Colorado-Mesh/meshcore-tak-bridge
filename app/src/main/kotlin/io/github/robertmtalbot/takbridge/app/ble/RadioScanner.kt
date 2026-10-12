@@ -9,6 +9,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelUuid
+import android.os.SystemClock
 
 /** A radio seen while scanning. */
 data class FoundRadio(val address: String, val name: String, val rssi: Int)
@@ -29,7 +30,20 @@ class RadioScanner(context: Context) {
         adapter == null -> "This device has no Bluetooth"
         !adapter.isEnabled -> "Bluetooth is off"
         adapter.bluetoothLeScanner == null -> "Bluetooth scanning is unavailable"
-        else -> null
+        else -> throttled()
+    }
+
+    /**
+     * Android lets an app start only a few scans in 30 seconds. A start past that limit is not
+     * refused: the scan simply never reports anything. So the limit is counted here, and the
+     * user is told how long to wait instead.
+     */
+    private fun throttled(): String? {
+        val now = SystemClock.elapsedRealtime()
+        while (starts.isNotEmpty() && now - starts.first() >= THROTTLE_WINDOW_MS) starts.removeFirst()
+        if (starts.size < MAX_STARTS) return null
+        val seconds = ((starts.first() + THROTTLE_WINDOW_MS - now) / 1000 + 1).coerceAtLeast(1)
+        return "Android allows only a few scans in 30 seconds. Try again in $seconds s"
     }
 
     /** Both callbacks run on the main thread. [onFound] may repeat a radio with a new signal level. */
@@ -58,6 +72,7 @@ class RadioScanner(context: Context) {
         }
         active = callback
         val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
+        starts.addLast(SystemClock.elapsedRealtime())
         scanner.startScan(null, settings, callback)
         main.postDelayed({
             if (active === callback) {
@@ -76,6 +91,16 @@ class RadioScanner(context: Context) {
     private fun looksLikeMeshCore(name: String) = name.startsWith("MeshCore", ignoreCase = true)
 
     private companion object {
+        /**
+         * When recent scans started, by the uptime clock. Android's limit is per app, so this is
+         * shared by every scanner the screen creates, for example after a rotation. Main thread only.
+         */
+        val starts = ArrayDeque<Long>()
+
         const val SCAN_MS = 12_000L
+
+        /** Android blocks the sixth scan start within 30 seconds; stay one under to be safe. */
+        const val MAX_STARTS = 4
+        const val THROTTLE_WINDOW_MS = 30_000L
     }
 }

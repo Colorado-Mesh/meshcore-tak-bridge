@@ -40,6 +40,9 @@ class MainActivity : Activity() {
     private lateinit var radioList: LinearLayout
     private lateinit var scanner: RadioScanner
     private val found = LinkedHashMap<String, FoundRadio>()
+
+    /** True while a scan runs. Main thread only. */
+    private var scanning = false
     private val onState: (BridgeState) -> Unit = { state -> runOnUiThread { render(state) } }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -91,7 +94,7 @@ class MainActivity : Activity() {
 
     override fun onStop() {
         BridgeStatus.removeListener(onState)
-        scanner.stop()
+        if (scanning) endScan()
         super.onStop()
     }
 
@@ -104,12 +107,30 @@ class MainActivity : Activity() {
         toggleButton.text = if (state.running) "Stop bridge" else "Start bridge"
         logView.text = state.log.asReversed().joinToString("\n")
         radioView.text = state.radio
-        radioButton.text = if (state.radioBusy) "Disconnect radio" else "Scan for radios"
+        showRadioButton(state)
     }
 
+    private fun showRadioButton(state: BridgeState = BridgeStatus.current()) {
+        radioButton.text = when {
+            state.radioBusy -> "Disconnect radio"
+            scanning -> "Stop scanning"
+            else -> "Scan for radios"
+        }
+    }
+
+    /**
+     * Disconnects, stops a scan in progress, or starts one. A second tap during a scan stops it
+     * rather than starting again: restarting cleared the list, and Android ignores an app that
+     * starts scans too often.
+     */
     private fun onRadioButton() {
         if (BridgeStatus.current().radioBusy) {
             startForegroundService(serviceIntent().setAction(BridgeService.ACTION_DISCONNECT_RADIO))
+            return
+        }
+        if (scanning) {
+            endScan()
+            BridgeStatus.log("Scan stopped")
             return
         }
         val missing = bluetoothPermissions().filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
@@ -141,10 +162,14 @@ class MainActivity : Activity() {
     private fun scan() {
         scanner.blocker()?.let {
             BridgeStatus.log("Cannot scan: $it")
+            radioList.removeAllViews()
+            showRadioNote("Cannot scan: $it")
             return
         }
         found.clear()
-        radioList.removeAllViews()
+        scanning = true
+        showRadioButton()
+        showFound()
         BridgeStatus.log("Scanning for radios for a few seconds")
         scanner.start(
             onFound = { radio ->
@@ -152,20 +177,37 @@ class MainActivity : Activity() {
                 showFound()
             },
             onDone = { problem ->
-                when {
-                    problem != null -> BridgeStatus.log("Radio scan: $problem")
-                    found.isEmpty() -> BridgeStatus.log(
+                scanning = false
+                showRadioButton()
+                val note = when {
+                    problem != null -> "Radio scan: $problem"
+                    found.isEmpty() ->
                         "No radios found. Check the radio is on, in Bluetooth mode and not connected to " +
-                            "another app" + if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) ", and that Location is on" else "",
-                    )
-                    else -> BridgeStatus.log("Scan finished; tap a radio to connect")
+                            "another app" + if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) ", and that Location is on" else ""
+                    else -> null
                 }
+                BridgeStatus.log(note ?: "Scan finished; tap a radio to connect")
+                showFound()
+                note?.let { showRadioNote(it) }
             },
         )
     }
 
+    private fun endScan() {
+        scanner.stop()
+        scanning = false
+        showRadioButton()
+        showFound()
+    }
+
+    /** A line of text under the radio button, where results appear, so the user sees it without scrolling to the log. */
+    private fun showRadioNote(text: String) {
+        radioList.addView(TextView(this).apply { this.text = text }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+    }
+
     private fun showFound() {
         radioList.removeAllViews()
+        if (scanning) showRadioNote(if (found.isEmpty()) "Looking for radios…" else "Still looking; tap a radio to connect")
         for (radio in found.values) {
             val signal = if (radio.rssi != 0) "  ${radio.rssi} dBm" else ""
             radioList.addView(
@@ -181,6 +223,8 @@ class MainActivity : Activity() {
 
     private fun connect(radio: FoundRadio) {
         scanner.stop()
+        scanning = false
+        found.clear()
         radioList.removeAllViews()
         startForegroundService(
             serviceIntent().setAction(BridgeService.ACTION_CONNECT_RADIO)
