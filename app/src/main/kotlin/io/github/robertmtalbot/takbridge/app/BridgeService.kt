@@ -82,7 +82,10 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
                 chooseRadio(it, intent.getStringExtra(EXTRA_NAME) ?: "radio")
             }
             ACTION_DISCONNECT_RADIO -> forgetRadio()
-            ACTION_RELOAD_STYLE -> worker.execute { sendMarkers() }
+            ACTION_RELOAD_STYLE -> {
+                BridgeStatus.log("Repeater icon in use: ${mesh.relayIconPath ?: "installation symbol"}")
+                worker.execute { sendMarkers() }
+            }
             else -> resumeSavedRadio()
         }
         return START_STICKY

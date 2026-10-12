@@ -208,7 +208,11 @@ class MainActivity : Activity() {
         val geoOps = Button(this).apply {
             text = "Use GeoOps Repeater"
             isAllCaps = false
-            setOnClickListener { field.setText(MeshPicture.GEOOPS_REPEATER_ICON) }
+            // Fills the field and saves in one step, so the choice cannot be left unsaved.
+            setOnClickListener {
+                field.setText(MeshPicture.GEOOPS_REPEATER_ICON)
+                save.performClick()
+            }
         }
         val buttons = LinearLayout(this).apply {
             addView(save)
