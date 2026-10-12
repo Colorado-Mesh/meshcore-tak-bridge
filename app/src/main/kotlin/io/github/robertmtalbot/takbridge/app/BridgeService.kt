@@ -24,6 +24,8 @@ import io.github.robertmtalbot.takbridge.protocol.ChannelMessage
 import io.github.robertmtalbot.takbridge.protocol.CompanionClient
 import io.github.robertmtalbot.takbridge.protocol.Contact
 import io.github.robertmtalbot.takbridge.protocol.DeviceInfo
+import io.github.robertmtalbot.takbridge.protocol.DirectMessage
+import io.github.robertmtalbot.takbridge.protocol.DirectOutcome
 import io.github.robertmtalbot.takbridge.protocol.SelfInfo
 import io.github.robertmtalbot.takbridge.takserver.TakServer
 import io.github.robertmtalbot.takbridge.takserver.TakServerListener
@@ -38,7 +40,9 @@ import java.util.concurrent.TimeUnit
  * Keeps the local TAK server running while ATAK is in use. A foreground service with a visible
  * notification is what stops Android from ending the bridge when its screen is not showing.
  *
- * Until the radio link exists it serves [DemoData]: fixed markers and a chat room that echoes.
+ * It joins the radio to ATAK: nodes become markers, channels and companions become contacts,
+ * and channel and direct chat flows both ways. With no radio chosen it serves [DemoData]: fixed
+ * markers and a chat contact that echoes.
  */
 class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
     /** Socket work stays off the main thread, where Android forbids network calls. */
@@ -64,8 +68,8 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
     @Volatile
     private var radioUp = false
 
-    /** Channel messages received while ATAK was not there to take them. */
-    private val backlog = ArrayList<ChannelMessage>()
+    /** Channel and direct messages received while ATAK was not there to take them. */
+    private val backlog = ArrayList<Any>()
 
     /** Who the connected ATAK says it is; learned from its first position report. */
     @Volatile
@@ -210,9 +214,19 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
 
     override fun onChannelMessage(message: ChannelMessage) {
         BridgeStatus.log("Mesh, channel ${message.channelIndex}: ${message.text}")
+        holdOrDeliver(message)
+    }
+
+    override fun onDirectMessage(message: DirectMessage) {
+        val from = mesh.contactFor(message)?.let { mesh.displayName(it) } ?: message.senderPrefixHex
+        BridgeStatus.log("Mesh, direct from $from: ${message.text}")
+        holdOrDeliver(message)
+    }
+
+    /** Chat is addressed to the ATAK user, who is not known until ATAK connects and reports in. */
+    private fun holdOrDeliver(message: Any) {
         val atak = identity
         if (atak == null) {
-            // Chat is addressed to the ATAK user, who is not known until ATAK connects and reports in.
             synchronized(backlog) {
                 backlog.add(message)
                 while (backlog.size > MAX_BACKLOG) backlog.removeAt(0)
@@ -222,13 +236,47 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         deliver(message, atak)
     }
 
-    private fun deliver(message: ChannelMessage, atak: ClientIdentity) {
-        val line = mesh.chatLine(message, atak)
-        if (line == null) {
-            BridgeStatus.log("Radio: message on unknown channel ${message.channelIndex} ignored")
-            return
+    private fun deliver(message: Any, atak: ClientIdentity) {
+        when (message) {
+            is ChannelMessage -> {
+                val line = mesh.chatLine(message, atak)
+                if (line == null) {
+                    BridgeStatus.log("Radio: message on unknown channel ${message.channelIndex} ignored")
+                    return
+                }
+                server?.send(CotEvents.geoChat(line, Instant.now()))
+            }
+            is DirectMessage -> {
+                val active = server ?: return
+                // The sender must be a contact ATAK can reach before a reply to it can work.
+                mesh.contactFor(message)?.let { contact ->
+                    if (mesh.noteTalkedTo(contact, Instant.now().epochSecond)) sendMeshMarkers(active, only = contact)
+                }
+                active.send(CotEvents.geoChat(mesh.directLine(message, atak), Instant.now()))
+            }
         }
-        server?.send(CotEvents.geoChat(line, Instant.now()))
+    }
+
+    override fun onDirectResult(id: Long, publicKeyHex: String, text: String, outcome: DirectOutcome) {
+        val contact = mesh.contactByKey(publicKeyHex) ?: return
+        val name = mesh.displayName(contact)
+        val note = when (outcome) {
+            DirectOutcome.DELIVERED -> {
+                BridgeStatus.log("ATAK to $name: delivered")
+                return
+            }
+            DirectOutcome.UNCONFIRMED -> {
+                BridgeStatus.log("ATAK to $name: no acknowledgement after ${CompanionClient.MAX_DIRECT_ATTEMPTS} tries")
+                "Not confirmed: no acknowledgement from $name after ${CompanionClient.MAX_DIRECT_ATTEMPTS} tries. It may not have arrived: ${text.take(40)}"
+            }
+            DirectOutcome.REFUSED -> {
+                BridgeStatus.log("ATAK to $name: the radio did not take the message")
+                "Not sent to the mesh: ${text.take(40)}"
+            }
+        }
+        val atak = identity ?: return
+        val now = Instant.now()
+        server?.send(CotEvents.geoChat(mesh.directNotice(contact, atak, note, now), now))
     }
 
     override fun onSendResult(channelIndex: Int, text: String, accepted: Boolean) {
@@ -394,35 +442,54 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
     override fun onChat(chat: InboundChat) {
         val now = Instant.now()
         val session = radio
-        if (mesh.hasRadio && (session == null || !radioUp)) {
-            val channel = mesh.channelFor(chat.room, chat.roomId) ?: return
-            BridgeStatus.log("ATAK to mesh, channel ${channel.index}: the radio is not connected; not sent")
-            val note = identity?.let { mesh.notice(channel.index, it, "Not sent: the radio is not connected.", now) }
-            note?.let { server?.send(CotEvents.geoChat(it, now)) }
-            return
-        }
-        if (!mesh.hasRadio || session == null) {
+        if (!mesh.hasRadio) {
             BridgeStatus.log("Chat from ATAK in \"${chat.room}\" (no radio linked): ${chat.text}")
             val reply = DemoData.message("Bridge heard: ${chat.text}", now, room = chat.room, roomId = chat.roomId)
             server?.send(CotEvents.geoChat(reply, now))
             return
         }
         val channel = mesh.channelFor(chat.room, chat.roomId)
-        if (channel == null) {
-            BridgeStatus.log("Chat from ATAK to \"${chat.room}\" (id ${chat.roomId}) is not for a mesh channel; not sent")
+        val node = if (channel == null) mesh.companionFor(chat.roomId) else null
+        if (channel == null && node == null) {
+            BridgeStatus.log("Chat from ATAK to \"${chat.room}\" (id ${chat.roomId}) is not for a mesh channel or companion; not sent")
             return
         }
-        val atak = identity
+        if (session == null || !radioUp) {
+            BridgeStatus.log("ATAK to mesh, \"${chat.room}\": the radio is not connected; not sent")
+            noteToAtak(channel, node, "Not sent: the radio is not connected.")
+            return
+        }
         val bytes = chat.text.toByteArray(Charsets.UTF_8).size
-        val limit = mesh.maxTextBytes()
+        val limit = if (node != null) mesh.maxDirectTextBytes() else mesh.maxTextBytes()
         if (bytes > limit) {
             BridgeStatus.log("ATAK to mesh, \"${chat.room}\": too long ($bytes of $limit bytes); not sent")
-            val note = atak?.let { mesh.notice(channel.index, it, "Not sent: too long for the mesh ($bytes of $limit bytes).", now) }
-            note?.let { server?.send(CotEvents.geoChat(it, now)) }
+            noteToAtak(channel, node, "Not sent: too long for the mesh ($bytes of $limit bytes).")
             return
         }
-        BridgeStatus.log("ATAK to mesh, channel ${channel.index} (${channel.name}): ${chat.text}")
-        session.sendChannelText(channel.index, chat.text)
+        if (node != null) {
+            BridgeStatus.log("ATAK to ${mesh.displayName(node)}, direct: ${chat.text}")
+            mesh.noteTalkedTo(node, now.epochSecond)
+            if (session.sendDirectText(node.publicKeyHex, chat.text) == null) {
+                BridgeStatus.log("ATAK to ${mesh.displayName(node)}: the radio is busy or still starting; not sent")
+                noteToAtak(null, node, "Not sent: the radio is busy or still starting. Try again shortly.")
+            }
+            return
+        }
+        val target = channel ?: return
+        BridgeStatus.log("ATAK to mesh, channel ${target.index} (${target.name}): ${chat.text}")
+        session.sendChannelText(target.index, chat.text)
+    }
+
+    /** A note from the bridge in the ATAK conversation a message was sent in: a channel's or a companion's. */
+    private fun noteToAtak(channel: Channel?, node: Contact?, text: String) {
+        val atak = identity ?: return
+        val now = Instant.now()
+        val line = when {
+            channel != null -> mesh.notice(channel.index, atak, text, now)
+            node != null -> mesh.directNotice(node, atak, text, now)
+            else -> null
+        } ?: return
+        server?.send(CotEvents.geoChat(line, now))
     }
 
     override fun onNotice(message: String) {

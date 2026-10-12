@@ -11,6 +11,8 @@ class CompanionClientTest {
     private val contacts = ArrayList<Contact>()
     private val messages = ArrayList<ChannelMessage>()
     private val results = ArrayList<Pair<String, Boolean>>()
+    private val directs = ArrayList<DirectMessage>()
+    private val directResults = ArrayList<Pair<String, DirectOutcome>>()
     private var channels: List<Channel>? = null
     private var now = 1_800_000_000_000L
 
@@ -22,6 +24,10 @@ class CompanionClientTest {
             override fun onChannels(channels: List<Channel>) { this@CompanionClientTest.channels = channels }
             override fun onChannelMessage(message: ChannelMessage) { messages.add(message) }
             override fun onSendResult(channelIndex: Int, text: String, accepted: Boolean) { results.add(text to accepted) }
+            override fun onDirectMessage(message: DirectMessage) { directs.add(message) }
+            override fun onDirectResult(id: Long, publicKeyHex: String, text: String, outcome: DirectOutcome) {
+                directResults.add(text to outcome)
+            }
         },
         clock = { now },
     )
@@ -150,5 +156,107 @@ class CompanionClientTest {
         startUp()
         client.onFrame(byteArrayOf(0x88.toByte(), 1, 2, 3))
         assertTrue(log.isEmpty())
+    }
+
+    private val ann = "a1b2c3d4e5f6" + "77".repeat(26)
+
+    private fun sentFrame(ack: Long, timeoutMs: Long = 5_000) = byteArrayOf(6, 1) + le32(ack) + le32(timeoutMs)
+
+    private fun confirmed(ack: Long) = byteArrayOf(0x82.toByte()) + le32(ack) + le32(800)
+
+    private fun directText(prefix: Byte, timestamp: Long, text: String) =
+        byteArrayOf(0x10, 0, 0, 0) + ByteArray(6) { prefix } + byteArrayOf(1, 0) + le32(timestamp) + text.toByteArray()
+
+    @Test
+    fun aDirectMessageIsSentAndItsAcknowledgementReported() {
+        startUp()
+        client.sendDirectText(ann, "where are you")
+        val frame = lastSent()
+        assertEquals(2, frame[0].toInt())
+        assertEquals(0, frame[2].toInt())
+        assertArrayEquals(le32(1_800_000_000), frame.copyOfRange(3, 7))
+        client.onFrame(sentFrame(0x1234))
+        assertTrue(directResults.isEmpty())
+        client.onFrame(confirmed(0x1234))
+        assertEquals(listOf("where are you" to DirectOutcome.DELIVERED), directResults)
+        // A repeated acknowledgement is not reported again.
+        client.onFrame(confirmed(0x1234))
+        assertEquals(1, directResults.size)
+    }
+
+    @Test
+    fun anUnacknowledgedDirectMessageIsRetriedWithItsFirstTimestampThenReported() {
+        startUp()
+        client.sendDirectText(ann, "ping")
+        client.onFrame(sentFrame(1))
+        now += 10_000
+        client.tick()
+        val retry = lastSent()
+        assertEquals(2, retry[0].toInt())
+        assertEquals(1, retry[2].toInt())
+        assertArrayEquals(le32(1_800_000_000), retry.copyOfRange(3, 7))
+        client.onFrame(sentFrame(2))
+        now += 10_000
+        client.tick()
+        assertEquals(2, lastSent()[2].toInt())
+        client.onFrame(sentFrame(3))
+        now += 10_000
+        client.tick()
+        assertEquals(listOf("ping" to DirectOutcome.UNCONFIRMED), directResults)
+    }
+
+    @Test
+    fun anAcknowledgementOfAnEarlierTryStillCounts() {
+        startUp()
+        client.sendDirectText(ann, "late")
+        client.onFrame(sentFrame(1))
+        now += 10_000
+        client.tick()
+        client.onFrame(sentFrame(2))
+        client.onFrame(confirmed(1))
+        assertEquals(listOf("late" to DirectOutcome.DELIVERED), directResults)
+    }
+
+    @Test
+    fun aDirectMessageToANodeTheRadioDoesNotKnowIsRefused() {
+        startUp()
+        client.sendDirectText(ann, "hello")
+        client.onFrame(byteArrayOf(1, 2))
+        assertEquals(listOf("hello" to DirectOutcome.REFUSED), directResults)
+    }
+
+    @Test
+    fun aDirectMessageBeforeStartUpIsRefused() {
+        assertEquals(null, client.sendDirectText(ann, "too soon"))
+        assertTrue(directResults.isEmpty())
+        assertTrue(sent.isEmpty())
+    }
+
+    @Test
+    fun receivedDirectMessagesAreReportedAndARetriedCopyIsDropped() {
+        startUp()
+        client.onFrame(byteArrayOf(0x83.toByte()))
+        client.onFrame(directText(0x11, 1_700_000_100, "on my way"))
+        client.onFrame(directText(0x11, 1_700_000_100, "on my way"))
+        client.onFrame(directText(0x11, 1_700_000_200, "on my way"))
+        client.onFrame(byteArrayOf(0x0A))
+        assertEquals(listOf(1_700_000_100L, 1_700_000_200L), directs.map { it.timestamp })
+        assertEquals("111111111111", directs.first().senderPrefixHex)
+        assertTrue(log.single().contains("arrived again"))
+    }
+
+    @Test
+    fun aChannelMessageSentFromAtakThatComesBackIsLoggedAndDropped() {
+        startUp()
+        client.sendChannelText(0, "on scene")
+        client.onFrame(byteArrayOf(0))
+        client.onFrame(byteArrayOf(0x83.toByte()))
+        client.onFrame(channelText(0, "Radio: on scene"))
+        client.onFrame(channelText(0, "Ann: on scene"))
+        client.onFrame(channelText(1, "Radio: on scene"))
+        client.onFrame(byteArrayOf(0x0A))
+        assertEquals(listOf("Ann: on scene", "Radio: on scene"), messages.map { it.text })
+        assertEquals(1, messages.last().channelIndex)
+        assertTrue(log.single().startsWith("Echo check"))
     }
 }

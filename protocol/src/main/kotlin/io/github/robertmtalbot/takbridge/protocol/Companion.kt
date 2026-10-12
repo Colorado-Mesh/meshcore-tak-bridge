@@ -79,6 +79,15 @@ data class ChannelMessage(
     val timestamp: Long,
 )
 
+/** A plain text message sent to this radio alone by another node. */
+data class DirectMessage(
+    /** The first 6 bytes of the sender's public key as 12 lowercase hex characters; all the radio gives. */
+    val senderPrefixHex: String,
+    val text: String,
+    /** Unix seconds, by the sender's clock. A sender's retries of one message keep the same value. */
+    val timestamp: Long,
+)
+
 /** One frame received from the radio, as far as the bridge understands it. */
 sealed interface CompanionFrame {
     data class Self(val info: SelfInfo) : CompanionFrame
@@ -99,7 +108,18 @@ sealed interface CompanionFrame {
 
     data class ChannelText(val message: ChannelMessage) : CompanionFrame
 
-    /** A queued message of a kind the bridge does not carry, such as a direct message. */
+    data class DirectText(val message: DirectMessage) : CompanionFrame
+
+    /**
+     * The radio has transmitted a direct message. [ackCode] is what the recipient's
+     * acknowledgement will carry, and [timeoutMs] is how long the radio expects that to take.
+     */
+    data class Sent(val flood: Boolean, val ackCode: Long, val timeoutMs: Long) : CompanionFrame
+
+    /** A recipient acknowledged the direct message whose [Sent.ackCode] this is. */
+    data class SendConfirmed(val ackCode: Long, val tripMs: Long) : CompanionFrame
+
+    /** A queued message of a kind the bridge does not carry, such as channel data or a room server post. */
     data class OtherMessage(val code: Int) : CompanionFrame
 
     data object NoMoreMessages : CompanionFrame
@@ -133,6 +153,7 @@ object CompanionFrames {
     private const val RESP_SELF_INFO = 0x05
     private const val RESP_DEVICE_INFO = 0x0D
 
+    private const val CMD_SEND_DIRECT_TEXT = 0x02
     private const val CMD_SEND_CHANNEL_TEXT = 0x03
     private const val CMD_GET_CONTACTS = 0x04
     private const val CMD_SYNC_NEXT_MESSAGE = 0x0A
@@ -149,6 +170,7 @@ object CompanionFrames {
     private const val RESP_CHANNEL_INFO = 0x12
     private const val RESP_CHANNEL_DATA = 0x1B
     private const val PUSH_ADVERT = 0x80
+    private const val PUSH_SEND_CONFIRMED = 0x82
     private const val PUSH_MSG_WAITING = 0x83
     private const val PUSH_NEW_ADVERT = 0x8A
     private const val TEXT_TYPE_PLAIN = 0
@@ -161,6 +183,12 @@ object CompanionFrames {
 
     /** The most text bytes a channel message carries, sender name and separator included. */
     const val MAX_CHANNEL_TEXT_BYTES = 160
+
+    /** The most text bytes a direct message carries; nothing is added in front. */
+    const val MAX_DIRECT_TEXT_BYTES = 160
+
+    /** How many bytes of a public key name a contact in direct-message frames. */
+    const val KEY_PREFIX_BYTES = 6
 
     private const val SELF_INFO_FIXED_BYTES = 58
     private const val DEVICE_INFO_V3_BYTES = 80
@@ -192,6 +220,18 @@ object CompanionFrames {
         byteArrayOf(CMD_SEND_CHANNEL_TEXT.toByte(), TEXT_TYPE_PLAIN.toByte(), channelIndex.toByte()) +
             le32(timestampSeconds) + text.toByteArray(Charsets.UTF_8)
 
+    /**
+     * Sends [text] to the contact whose public key is [publicKeyHex]; the radio answers with
+     * [CompanionFrame.Sent], or an error when it has no such contact. [attempt] counts from 0 and
+     * a retry keeps the first try's [timestampSeconds], as the MeshCore apps do.
+     */
+    fun sendDirectText(publicKeyHex: String, attempt: Int, timestampSeconds: Long, text: String): ByteArray {
+        require(publicKeyHex.length >= KEY_PREFIX_BYTES * 2) { "public key too short" }
+        val prefix = ByteArray(KEY_PREFIX_BYTES) { publicKeyHex.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
+        return byteArrayOf(CMD_SEND_DIRECT_TEXT.toByte(), TEXT_TYPE_PLAIN.toByte(), (attempt and 3).toByte()) +
+            le32(timestampSeconds) + prefix + text.toByteArray(Charsets.UTF_8)
+    }
+
     private fun le32(value: Long) = ByteArray(4) { (value shr (8 * it)).toByte() }
 
     fun parse(frame: ByteArray): CompanionFrame? {
@@ -202,7 +242,8 @@ object CompanionFrames {
             RESP_ERROR -> CompanionFrame.Error(frame.getOrNull(1)?.let { it.toInt() and 0xFF })
             RESP_SELF_INFO -> parseSelfInfo(frame)
             RESP_DEVICE_INFO -> parseDeviceInfo(frame)
-            RESP_SENT -> CompanionFrame.Ok
+            RESP_SENT -> if (frame.size >= 10) CompanionFrame.Sent(frame[1].toInt() == 1, uint32(frame, 2), uint32(frame, 6)) else null
+            PUSH_SEND_CONFIRMED -> if (frame.size >= 9) CompanionFrame.SendConfirmed(uint32(frame, 1), uint32(frame, 5)) else null
             RESP_CONTACTS_START -> CompanionFrame.ContactsStart
             RESP_CONTACT -> parseContact(frame)?.let { CompanionFrame.ContactEntry(it, pushed = false) }
             PUSH_NEW_ADVERT -> parseContact(frame)?.let { CompanionFrame.ContactEntry(it, pushed = true) }
@@ -210,7 +251,9 @@ object CompanionFrames {
             RESP_CHANNEL_INFO -> parseChannel(frame)
             RESP_CHANNEL_MSG -> parseChannelText(frame, 1)
             RESP_CHANNEL_MSG_V3 -> parseChannelText(frame, 4)
-            RESP_CONTACT_MSG, RESP_CONTACT_MSG_V3, RESP_CHANNEL_DATA -> CompanionFrame.OtherMessage(code)
+            RESP_CONTACT_MSG -> parseDirectText(frame, 1)
+            RESP_CONTACT_MSG_V3 -> parseDirectText(frame, 4)
+            RESP_CHANNEL_DATA -> CompanionFrame.OtherMessage(code)
             RESP_NO_MORE_MESSAGES -> CompanionFrame.NoMoreMessages
             PUSH_MSG_WAITING -> CompanionFrame.MessagesWaiting
             PUSH_ADVERT -> CompanionFrame.AdvertHeard
@@ -264,6 +307,25 @@ object CompanionFrames {
                 channelIndex = frame[start].toInt() and 0xFF,
                 text = text(frame, start + 7, frame.size - start - 7),
                 timestamp = uint32(frame, start + 3),
+            ),
+        )
+    }
+
+    /**
+     * [start] is where the sender's key prefix sits: 1 in the old layout, 4 after the signal bytes
+     * in the new. Then come the path length, the text type and the sender's timestamp. Only plain
+     * text is read; signed posts from room servers and command replies are other kinds.
+     */
+    private fun parseDirectText(frame: ByteArray, start: Int): CompanionFrame? {
+        val textStart = start + KEY_PREFIX_BYTES + 6
+        if (frame.size < textStart) return null
+        val code = frame[0].toInt() and 0xFF
+        if (frame[start + KEY_PREFIX_BYTES + 1].toInt() != TEXT_TYPE_PLAIN) return CompanionFrame.OtherMessage(code)
+        return CompanionFrame.DirectText(
+            DirectMessage(
+                senderPrefixHex = hex(frame, start, KEY_PREFIX_BYTES),
+                text = text(frame, textStart, frame.size - textStart),
+                timestamp = uint32(frame, start + KEY_PREFIX_BYTES + 2),
             ),
         )
     }

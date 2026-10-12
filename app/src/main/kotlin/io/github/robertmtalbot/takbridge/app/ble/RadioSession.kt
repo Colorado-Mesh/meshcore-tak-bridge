@@ -36,6 +36,9 @@ class RadioSession(
 
     fun sendChannelText(channelIndex: Int, text: String) = client.sendChannelText(channelIndex, text)
 
+    /** Returns the id the listener's direct-message result will carry, or null when the radio cannot take it now. */
+    fun sendDirectText(publicKeyHex: String, text: String): Long? = client.sendDirectText(publicKeyHex, text)
+
     override fun onLog(message: String) = BridgeStatus.log("Radio: $message")
 
     override fun onReady(packetSize: Int) {

@@ -7,6 +7,7 @@ import io.github.robertmtalbot.takbridge.protocol.Channel
 import io.github.robertmtalbot.takbridge.protocol.ChannelMessage
 import io.github.robertmtalbot.takbridge.protocol.CompanionFrames
 import io.github.robertmtalbot.takbridge.protocol.Contact
+import io.github.robertmtalbot.takbridge.protocol.DirectMessage
 import io.github.robertmtalbot.takbridge.protocol.SelfInfo
 import java.time.Instant
 import java.time.ZoneOffset
@@ -21,6 +22,11 @@ import java.util.concurrent.ConcurrentHashMap
  * a reply to a contact it can reach, and the event names that contact, so a contact per channel
  * tells the bridge exactly which channel a message is for. The mesh sender's name stays in the
  * text, as MeshCore sends it.
+ *
+ * Companion nodes are reachable contacts too, so the ATAK user can message one directly. Only
+ * companions: a repeater or room server reads plain text from its admin as a command.
+ * A companion with no position on the map still gets a contact, at 0, 0 like the channels,
+ * once a direct message has passed between it and the ATAK user, so the conversation can go on.
  */
 class MeshPicture {
     @Volatile
@@ -29,6 +35,9 @@ class MeshPicture {
     @Volatile
     private var rooms: Map<String, Channel> = emptyMap()
     private val contacts = ConcurrentHashMap<String, Contact>()
+
+    /** Public keys of companions a direct message has passed with since the radio was chosen. */
+    private val talkedTo: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     /**
      * Icon for repeaters and room servers, as `<icon set uid>/<group>/<file>`, or null for the
@@ -88,7 +97,60 @@ class MeshPicture {
         self = null
         rooms = emptyMap()
         contacts.clear()
+        talkedTo.clear()
     }
+
+    /** The companion a chat event from ATAK is for, going by the contact uid it was addressed to. */
+    fun companionFor(uid: String?): Contact? {
+        if (uid == null) return null
+        return contacts.values.firstOrNull { it.type == Contact.TYPE_COMPANION && markerUid(it) == uid }
+    }
+
+    fun contactByKey(publicKeyHex: String): Contact? = contacts[publicKeyHex]
+
+    /** The node a direct message came from; the radio names it by the first 6 bytes of its key. */
+    fun contactFor(message: DirectMessage): Contact? = contacts.values.firstOrNull { it.publicKeyHex.startsWith(message.senderPrefixHex) }
+
+    /**
+     * Notes that a direct message passed with [contact]. True when ATAK needs its contact sent
+     * now: the node is a companion that the map does not already show.
+     */
+    fun noteTalkedTo(contact: Contact, nowSeconds: Long): Boolean {
+        if (contact.type != Contact.TYPE_COMPANION) return false
+        val added = talkedTo.add(contact.publicKeyHex)
+        return added && !isShown(contact, nowSeconds)
+    }
+
+    /** A direct message has no prefix added, so it can use every byte the protocol allows. */
+    fun maxDirectTextBytes(): Int = CompanionFrames.MAX_DIRECT_TEXT_BYTES
+
+    /** A received direct message as a line from its sender's contact to the ATAK user. */
+    fun directLine(message: DirectMessage, atak: ClientIdentity): ChatSpec {
+        val contact = contactFor(message)
+        val id = "dm-${message.senderPrefixHex}-${message.timestamp}-${Integer.toHexString(message.text.hashCode())}"
+        return ChatSpec(
+            room = atak.callsign,
+            roomId = atak.uid,
+            senderUid = contact?.let { markerUid(it) } ?: "MESHCORE-${message.senderPrefixHex}",
+            senderCallsign = contact?.let { displayName(it) } ?: message.senderPrefixHex.take(8),
+            text = message.text,
+            messageId = id,
+            sentAt = Instant.ofEpochSecond(message.timestamp),
+        )
+    }
+
+    /** A line from the bridge in the conversation with [contact], such as a note that a message was not delivered. */
+    fun directNotice(contact: Contact, atak: ClientIdentity, text: String, now: Instant) = ChatSpec(
+        room = atak.callsign,
+        roomId = atak.uid,
+        senderUid = markerUid(contact),
+        senderCallsign = displayName(contact),
+        text = text,
+        messageId = "note-${now.toEpochMilli()}",
+        sentAt = now,
+    )
+
+    fun displayName(contact: Contact) = contact.name.ifEmpty { contact.publicKeyHex.take(8) }
 
     /** The channel a chat event from ATAK is for, going by the contact it was addressed to. */
     fun channelFor(room: String, roomId: String?): Channel? =
@@ -135,8 +197,26 @@ class MeshPicture {
             )
         }
         for (contact in contacts.values) {
-            if (!isShown(contact, nowSeconds)) continue
             val companion = contact.type == Contact.TYPE_COMPANION
+            if (!isShown(contact, nowSeconds)) {
+                // Off the map, but in a conversation with the ATAK user: keep it reachable.
+                if (companion && contact.publicKeyHex in talkedTo) {
+                    list.add(
+                        MarkerSpec(
+                            uid = markerUid(contact),
+                            cotType = "a-f-G-U-C",
+                            callsign = displayName(contact),
+                            latitude = 0.0,
+                            longitude = 0.0,
+                            team = companionTeam,
+                            role = "Team Member",
+                            remarks = "MeshCore companion with no position on the map, for direct messages",
+                            endpoint = "*:-1:stcp",
+                        ),
+                    )
+                }
+                continue
+            }
             list.add(
                 MarkerSpec(
                     uid = markerUid(contact),
@@ -145,9 +225,10 @@ class MeshPicture {
                         Contact.TYPE_SENSOR -> "a-f-G-E-S"
                         else -> "a-f-G-I"
                     },
-                    callsign = contact.name.ifEmpty { contact.publicKeyHex.take(8) },
+                    callsign = displayName(contact),
                     latitude = contact.latitude,
                     longitude = contact.longitude,
+                    endpoint = if (companion) "*:-1:stcp" else null,
                     iconsetPath = when (contact.type) {
                         Contact.TYPE_REPEATER -> relayIconPath
                         Contact.TYPE_ROOM_SERVER -> roomIconPath

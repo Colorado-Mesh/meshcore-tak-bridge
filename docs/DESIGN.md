@@ -49,7 +49,7 @@ A bridge app avoids the last two by design: it speaks only the standard TAK serv
 - iPhone support. iTAK cannot be served this way from an Android app.
 - Anything inside ATAK's interface: no custom tools, menus or buttons. That would need a plugin.
 
-Direct messages with individual mesh nodes were left out of the first pass and are now the next feature (see [STATUS.md](STATUS.md)).
+Direct messages with companion nodes were left out of the first pass and added on 12 October 2026 (see "Direct messages" below).
 
 ## Architecture
 
@@ -98,7 +98,7 @@ The `CompanionClient` in the `protocol` module runs the conversation once the li
 3. Fetch contacts, then fetch each channel slot up to the number the radio reported (8 for firmware too old to say).
 4. Fetch waiting messages, then react to the radio's own "messages waiting" and "advert heard" notices.
 
-The client never sets the radio's clock, channels, contacts or settings. Sending channel text is the only command that causes a transmission.
+The client never sets the radio's clock, channels, contacts, paths or settings. Sending channel text and sending a direct message are the only commands that cause a transmission.
 
 The protocol page is marked as still in development and does not document everything the app uses, such as the contact record layout. Those details come from the MeshCore firmware source, are checked against real radios, and are covered by tests with recorded frames.
 
@@ -146,11 +146,30 @@ So every channel is a contact:
 - Messages heard before ATAK connects and identifies itself are held, up to 50, and delivered when it does.
 - If the radio is not connected, does not accept the message, or the message is too long, the bridge says so in that chat.
 
+## Direct messages
+
+Direct messages use the same pattern as channels: a contact ATAK can reach stands for each node, and ATAK's reply names that contact.
+
+- **Who can be messaged.** Companion nodes only. A repeater or room server treats plain text from its admin as a command line, so the bridge never sends chat to one, and repeaters and room servers get no endpoint in ATAK.
+- **Contacts.** A companion on the map has the `*:-1:stcp` endpoint. A companion with no position, or one the filters hide, becomes a contact at 0, 0 (like a channel) once a direct message has passed with it, so the conversation can go on. That list is cleared when a different radio is chosen.
+- **Receiving.** The radio names the sender by the first 6 bytes of its public key. The bridge looks up the full contact and posts the text from that node's contact to the ATAK user. Messages heard before ATAK identifies itself are held with channel messages, up to 50 in all.
+- **Duplicates.** When a sender's acknowledgement is lost, the sender tries again with the same timestamp and text. The radio delivers each try, so the bridge drops a repeat of a message from the same sender with the same timestamp and text in the last 15 minutes, and logs it.
+- **Sending.** A message to a companion's contact is sent with the companion protocol's send-text command, addressed by the 6-byte key prefix, up to 160 bytes. The radio replies with the code the recipient's acknowledgement will carry and an estimate of how long it should take.
+- **Acknowledgement and retries.** If no acknowledgement arrives within that estimate (kept between 2 and 60 seconds) plus 2 seconds, the message is sent again with the same timestamp, up to 3 tries in all. An acknowledgement of any try counts. The MeshCore apps also reset the contact's path before the last try; the bridge does not, because that would write to the radio's contacts.
+- **Feedback in ATAK.** Delivery is logged. No acknowledgement after 3 tries, or a refusal by the radio (for example, a node it does not know), puts a note in that conversation. ATAK's own delivery receipts (`b-t-f-d`) are not sent yet.
+
+Room server posts arrive as signed messages and are skipped. The radio's log says so once per connection.
+
+## Echoes
+
+A channel message sent from ATAK should never come back to ATAK. The firmware marks each packet it floods as already seen, so a repeater's rebroadcast is dropped, and sending a channel message produces no received-message frame. The bridge still checks. A received channel message with the same channel and text as one it sent in the last 15 minutes (`"<radio name>: <text>"`, the form the radio transmits) is dropped and logged as an echo, so a device test can show whether it ever happens. The check could also drop an identical message from a different node with the same name as this radio. That is unlikely, and it is logged.
+
 ## Data mapping
 
 | On the mesh | In ATAK | Notes |
 | --- | --- | --- |
-| Companion node with a position | Team member marker (`a-f-G-U-C`) | Team colour chosen in the app, default Cyan; callsign is the node name |
+| Companion node with a position | Team member marker (`a-f-G-U-C`), reachable for chat | Team colour chosen in the app, default Cyan; callsign is the node name |
+| Companion node off the map, after a direct message | Team member contact at 0, 0, reachable for chat | Keeps the conversation going |
 | Repeater with a position | Installation marker (`a-f-G-I`) | Optional icon from an ATAK icon set (GeoOps presets offered) |
 | Room server with a position | Installation marker (`a-f-G-I`) | Its own optional icon, separate from repeaters |
 | Sensor node with a position | Sensor marker (`a-f-G-E-S`) | |
@@ -158,6 +177,8 @@ So every channel is a contact:
 | Channel on the radio | Contact, with a chat | See "Chat: channels as contacts" |
 | Channel message heard | Message from that channel's contact | Sender's name kept in the text |
 | Message sent to a channel contact in ATAK | Channel message from this radio | Goes out under the radio's own name |
+| Direct message heard | Message from that node's contact | |
+| Message sent to a companion's contact in ATAK | Direct message to that node | Acknowledged, or tried up to 3 times |
 
 **Markers.** Each node's uid is built from its MeshCore public key (`MESHCORE-` and the first 16 hex digits), so it keeps its marker across restarts. The remarks give the node kind and its last advert time.
 
@@ -172,7 +193,8 @@ So every channel is a contact:
 The app's exposure is small because nothing leaves the phone except what the radio transmits.
 
 - **Loopback only.** The TAK server binds to `127.0.0.1`, so no other device on a network can reach it. Other apps on the same phone can, which is why the server accepts a single client and the app shows when one is connected.
-- **Transmitting is the user's own act.** Only messages the user sends to a channel contact are transmitted, on that channel, from the user's own radio.
+- **Transmitting is the user's own act.** Only messages the user sends to a channel or companion contact are transmitted, from the user's own radio. Retries of an unacknowledged direct message are the only transmissions the bridge repeats on its own, and they stop after 3 tries.
+- **No commands to infrastructure.** Chat is never sent to a repeater or room server, which could read it as an admin command.
 - **No configuration writes.** The app cannot alter channels, keys, contacts, the clock or radio settings. Channel keys are read only to classify the channel and are not kept.
 - **Untrusted input.** Everything from the radio and from ATAK is parsed defensively with length limits, and outgoing events are built from parsed fields with XML escaping, never by passing text through.
 - **Rate limit.** At most 10 chat messages a minute are accepted from ATAK, and at most 5 can wait to be sent, so a misbehaving client cannot flood a slow shared channel.
@@ -217,10 +239,11 @@ Not yet in place: a simulated radio that runs the whole bridge end to end on a c
 | 3. Protocol | Done for what version 1 needs |
 | 4. Nodes on the map | Done, with type and age filters, team colour and icons |
 | 5. Channel chat | Done, with channels as contacts |
+| 5a. Direct messages and echo check | Built and unit-tested; device test pending |
 | 6. App shell | Mostly done: radio picker, connection status, map settings, background service |
 | 7. Field test and first release | Not started; needs a signed APK and a settled application ID |
 
-Later candidates, in rough order: direct messages, the radio's battery in ATAK, splitting long messages, and sharing the phone's position to the mesh.
+Later candidates, in rough order: ATAK delivery receipts for direct messages, the radio's battery in ATAK, room server posts, splitting long messages, and sharing the phone's position to the mesh.
 
 ## Open questions and risks
 
@@ -233,7 +256,8 @@ Settled by testing on devices:
 
 Still open:
 
-- [ ] **Does the radio report a sent channel message back, or is it heard again through a repeater, so that it shows twice in ATAK?** The bridge has no echo suppression yet; this needs checking with a repeater in range.
+- [ ] **Does a sent channel message ever come back, so that it shows twice in ATAK?** The firmware source says not (see "Echoes"). The bridge logs and drops any that do, and the device test in STATUS.md will confirm it with a repeater in range.
+- [ ] **Do ATAK's delivery receipts work through this server?** Sending `b-t-f-d` for acknowledged direct messages would show them as delivered in ATAK, but has not been tried.
 - [ ] **Which undocumented protocol details are stable?** The contact record and advert layouts come from firmware source, not the published page, and may change between firmware versions.
 - [ ] **Should the phone's position be shared to the mesh?** It would mean writing the radio's advertised location, which conflicts with the rule of never changing radio settings.
 - [ ] **What is the final application ID?** Currently `io.github.robertmtalbot.takbridge`; it should be settled before the first signed release, and may depend on a move to Colorado Mesh.

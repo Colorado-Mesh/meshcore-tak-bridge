@@ -95,4 +95,44 @@ class CompanionFramesTest {
         assertEquals(Channel.Kind.PRIVATE, kindOf("#denver", ByteArray(16) { 9 }))
         assertEquals(Channel.Kind.PRIVATE, kindOf("Team", ByteArray(16) { 9 }))
     }
+
+    private val contactKey = "a1b2c3d4e5f6" + "00".repeat(26)
+    private val prefix = byteArrayOf(0xA1.toByte(), 0xB2.toByte(), 0xC3.toByte(), 0xD4.toByte(), 0xE5.toByte(), 0xF6.toByte())
+
+    @Test
+    fun sendDirectTextMatchesTheFirmwareLayout() {
+        // Code, text type, attempt, timestamp, the recipient's 6-byte key prefix, then the text.
+        val expected = byteArrayOf(2, 0, 1) + le32(1_700_000_000) + prefix + "hi".toByteArray()
+        assertArrayEquals(expected, CompanionFrames.sendDirectText(contactKey, 1, 1_700_000_000, "hi"))
+    }
+
+    @Test
+    fun readsADirectMessageInTheNewLayout() {
+        val frame = byteArrayOf(0x10, 24, 0, 0) + prefix + byteArrayOf(2, 0) + le32(1_700_000_123) + "Meet at the trailhead".toByteArray()
+        val message = (CompanionFrames.parse(frame) as CompanionFrame.DirectText).message
+        assertEquals(DirectMessage("a1b2c3d4e5f6", "Meet at the trailhead", 1_700_000_123), message)
+    }
+
+    @Test
+    fun readsADirectMessageInTheOldLayout() {
+        val frame = byteArrayOf(0x07) + ByteArray(6) { 0x11 } + byteArrayOf(0xFF.toByte(), 0) + le32(5) + "ok".toByteArray()
+        val message = (CompanionFrames.parse(frame) as CompanionFrame.DirectText).message
+        assertEquals("111111111111", message.senderPrefixHex)
+        assertEquals("ok", message.text)
+    }
+
+    @Test
+    fun aSignedRoomServerPostIsNotReadAsADirectMessage() {
+        val frame = byteArrayOf(0x10, 0, 0, 0) + ByteArray(6) + byteArrayOf(1, 2) + le32(5) + ByteArray(4) + "post".toByteArray()
+        assertEquals(CompanionFrame.OtherMessage(0x10), CompanionFrames.parse(frame))
+    }
+
+    @Test
+    fun readsSentAndConfirmedFrames() {
+        val sent = byteArrayOf(6, 1) + le32(0x0A0B0C0D) + le32(9_000)
+        assertEquals(CompanionFrame.Sent(flood = true, ackCode = 0x0A0B0C0D, timeoutMs = 9_000), CompanionFrames.parse(sent))
+        val confirmed = byteArrayOf(0x82.toByte()) + le32(0x0A0B0C0D) + le32(1_234)
+        assertEquals(CompanionFrame.SendConfirmed(0x0A0B0C0D, 1_234), CompanionFrames.parse(confirmed))
+        assertEquals(CompanionFrame.Other(6, 2), CompanionFrames.parse(byteArrayOf(6, 0)))
+    }
 }
