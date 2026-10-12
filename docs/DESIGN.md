@@ -253,7 +253,6 @@ Settled by testing on devices:
 - [x] **How does ATAK address a reply?** To a reachable contact, not to a room; hence channels as contacts.
 - [x] **Will Android keep the bridge running?** Yes on both test devices, including overnight on the Tab Active 3.
 - [x] **Does pairing work across devices?** Yes on both test devices, with the PIN prompt and the packet size request allowed to go unanswered.
-
 - [x] **Does a sent channel message ever come back, so that it shows twice in ATAK?** No. The firmware source says not (see "Echoes"), and the bridge's echo log never fired in testing on 12 October 2026. The guard stays as a safety net.
 
 Still open:
