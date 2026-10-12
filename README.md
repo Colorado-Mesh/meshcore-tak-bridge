@@ -1,33 +1,34 @@
 # MeshCore TAK Bridge
 
-An Android app that connects a phone to a [MeshCore](https://docs.meshcore.io/) companion radio over Bluetooth and presents the mesh to [ATAK](https://tak.gov/) as a local TAK server. Mesh nodes appear as map markers, and mesh channels appear as ordinary ATAK chat rooms.
+An Android app that connects a phone to a [MeshCore](https://docs.meshcore.io/) companion radio over Bluetooth and presents the mesh to [ATAK](https://tak.gov/) as a local TAK server. Mesh nodes appear as map markers, and each mesh channel appears as an ATAK contact you can chat with.
 
-It is the phone-side counterpart to the TAK server in the [Colorado Mesh desktop client](https://github.com/Colorado-Mesh/mesh-client). The full design, goals and plan are in [docs/DESIGN.md](docs/DESIGN.md).
+It is the phone-side counterpart to the TAK server in the [Colorado Mesh desktop client](https://github.com/Colorado-Mesh/mesh-client). How it works and why is in [docs/DESIGN.md](docs/DESIGN.md); what is done and what is next is in [docs/STATUS.md](docs/STATUS.md).
 
 ## Status
 
-**Early development. There is no radio support yet.**
+**Working, pre-release.** Tested on a Pixel 9 Pro and a Samsung Galaxy Tab Active 3. There is no signed release yet, only debug builds.
 
-What exists today is the ATAK half, built to answer one question first: will ATAK connect to a plain TCP server on the same phone, show its markers, and exchange chat with it? The app serves three fixed demo markers in central Denver and one chat room that echoes what you send.
+What works:
 
-| Milestone | State |
-| --- | --- |
-| 0. Repository, build, tests | Written; the first CI build has not run yet |
-| 1. ATAK spike: local TAK server with demo data | Built, awaiting a test on a device |
-| 2. Bluetooth spike | Not started |
-| 3 to 7 | See the [development plan](docs/DESIGN.md#development-plan) |
+- A local TAK server for ATAK on `127.0.0.1:8087`, plain TCP, loopback only, one client.
+- A Bluetooth link to a MeshCore companion radio, with every step queued and time-limited, PIN pairing, and automatic reconnection to the radio chosen last time.
+- Every node that shares a position as an ATAK marker: companions as team members in a team colour you choose, repeaters and room servers as installations (optionally with an icon from an ATAK icon set), sensors as sensors. Filters by node type and by how recently a node was heard.
+- Every channel on the radio as an ATAK contact, two-way: channel text arrives as messages from that contact, and a message you send to it goes out on that channel.
+- Never writes to the radio's settings, channels, contacts or clock.
 
-Not yet tested on a device: everything in the Android app. The `cot` and `takserver` modules have automated tests.
+Not yet: direct messages to individual mesh nodes, a signed release APK, the radio's battery in ATAK.
 
 ## Try it
 
-1. Download the debug APK from the latest run of the **CI** workflow under the repository's Actions tab (artifact `meshcore-tak-bridge-debug-apk`), or build it yourself (below).
-2. Install it on a phone that has ATAK, open it, and tap **Start bridge**.
-3. In ATAK, open Settings, Network Preferences, TAK Servers, and add a server with address `127.0.0.1`, port `8087`, protocol TCP. Leave SSL/TLS off.
-4. Three demo markers appear in central Denver, and a chat room called "Bridge Test" appears with a welcome message.
-5. Reply in that room. The bridge answers "Bridge heard: ..." and shows the message in its log.
+1. Download the debug APK from the latest run of the **CI** workflow under the repository's Actions tab (artifact `meshcore-tak-bridge-debug-apk`), or build it yourself (below). Each CI build is signed with a different temporary debug key, so uninstall the previous build before installing a new one.
+2. Install it on a phone that has ATAK, open it, and tap **Start bridge**. Allow Bluetooth and notification permissions when asked.
+3. Tap **Scan for radios**, then tap your radio. Enter its PIN if Android asks to pair. The app remembers the radio and reconnects to it on its own.
+4. In ATAK, open Settings, Network Preferences, TAK Servers, and add a server with address `127.0.0.1`, port `8087`, protocol TCP. Leave SSL/TLS off.
+5. Mesh nodes with a position appear on the map. Each channel appears in ATAK's contacts (`Public`, `#name` for hashtag channels, a lock for private channels), with an opening line in its chat. Messages you send to a channel contact go out over the radio under the radio's name.
 
-Each CI build is signed with a different temporary debug key, so uninstall the previous build before installing a new one.
+Messages longer than the mesh allows (about 133 bytes, less the radio's name) are not sent; the bridge says so in the chat instead.
+
+With no radio connected the bridge serves three demo markers in central Denver and a chat contact that echoes what you send, which is useful for checking the ATAK side alone.
 
 ## Build and test
 
@@ -38,25 +39,29 @@ Requires JDK 17 (Gradle fetches it if missing) and, for the app, the Android SDK
 ./gradlew assembleDebug   # app/build/outputs/apk/debug/app-debug.apk
 ```
 
+Every push to `main` runs the tests and builds the debug APK in GitHub Actions.
+
 ## Layout
 
 | Module | Contents |
 | --- | --- |
-| `cot` | Builds and parses the Cursor on Target events ATAK exchanges: markers, GeoChat, ping and pong, and the stream framer. Plain Kotlin. |
+| `protocol` | MeshCore companion protocol: frame encoding and decoding, and the client that runs the conversation with the radio one command at a time. Plain Kotlin. |
+| `cot` | The Cursor on Target events ATAK exchanges: markers, contacts, GeoChat, deletes, ping and pong, and the stream framer. Plain Kotlin. |
 | `takserver` | The loopback TCP server: one client, keepalive replies, inbound chat, rate limit. Plain Kotlin. |
-| `app` | The Android app: a foreground service that runs the server, and a status screen. |
+| `app` | The Android app: the Bluetooth link (`ble/`), the mesh-to-ATAK mapping (`MeshPicture`), the foreground service that ties them together, and the status and settings screen. |
 
-The `protocol`, `bridge` and `ble` modules described in the design arrive with the radio work.
+The plain-Kotlin modules have JUnit tests. The app is built in code with no layout resources.
 
 ## Design rules
 
 These come from problems seen in practice, and changes should keep to them.
 
-- Never write to the radio's configuration. No channels are created or altered.
-- One Bluetooth operation at a time, and every operation has a timeout.
-- Use every channel the radio reports.
+- Never write to the radio's configuration: no channels, contacts, settings or clock.
+- One Bluetooth operation at a time, and every operation has a time limit.
+- Use every channel the radio reports, not a fixed number of slots.
 - Send plain MeshCore channel text, readable by any MeshCore app.
-- Listen on the loopback address only.
+- Channels are ATAK contacts, not GeoChat rooms, so ATAK's replies say which channel they are for.
+- Listen on `127.0.0.1` explicitly, not Android's default loopback (`::1`).
 - Events sent to ATAK are bare `<event>` elements with no XML declaration.
 
 ## Licence

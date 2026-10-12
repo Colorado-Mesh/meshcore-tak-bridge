@@ -34,10 +34,12 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
 
 ## Still to do
 
-1. Update `README.md` and `docs/DESIGN.md` to match the above (they still describe the early demo and channels as rooms).
-2. Direct messages between the ATAK user and individual mesh nodes (only channels are bridged).
-3. A signed release APK and a settled application ID (currently `io.github.robertmtalbot.takbridge`).
+1. Direct messages between the ATAK user and individual mesh nodes (only channels are bridged).
+2. A signed release APK and a settled application ID (currently `io.github.robertmtalbot.takbridge`).
+3. Check whether a sent channel message comes back from the radio or a repeater and shows twice in ATAK; there is no echo suppression yet.
 4. Later: radio battery in ATAK, and moving the repository to Colorado Mesh if they agree.
+
+`README.md` and `docs/DESIGN.md` were brought up to date on 2026-10-12.
 
 ## Related work in Colorado-Mesh/mesh-client
 
