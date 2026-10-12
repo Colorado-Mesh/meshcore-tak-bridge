@@ -253,7 +253,7 @@ Not yet in place: a simulated radio that runs the whole bridge end to end on a c
 | 6. App shell | Mostly done: radio picker, connection status, map settings, background service |
 | 7. Field test and first release | Not started; needs a signed APK and a settled application ID |
 
-Later candidates, in rough order: ATAK delivery receipts for direct messages, the radio's battery in ATAK, room server posts, splitting long messages, and sharing the phone's position to the mesh.
+Later candidates, in rough order: replying to a sender on a channel (see STATUS.md for the open questions), ATAK delivery receipts for direct messages, the radio's battery in ATAK, room server posts, splitting long messages, and sharing the phone's position to the mesh.
 
 ## Open questions and risks
 

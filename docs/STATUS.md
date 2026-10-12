@@ -45,7 +45,12 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
 
 1. A signed release APK and a settled application ID (currently `io.github.robertmtalbot.takbridge`).
 2. Possibly: ATAK delivery receipts (`b-t-f-d`) for acknowledged direct messages, so ATAK shows them as delivered; and room server posts, which arrive as signed messages and are skipped for now.
-3. Later: radio battery in ATAK, and moving the repository to Colorado Mesh if they agree.
+3. **Reply to a sender on a channel**, if it can be done well. Requested 2026-10-12. To work out:
+   - How the MeshCore apps mark a reply or mention. They are understood to begin the text with the sender's name as `@[Name]`; check this against the app and the firmware before building on it.
+   - ATAK's chat has no reply action, and adding one would need a plugin. The likely route is a typed convention: a message from ATAK that starts with `@Name` (or `@"Two Words"`) goes out as `@[Name] …`, so MeshCore users see a normal reply.
+   - Matching the name: offer only names heard on that channel recently, ignore case, and send the text unchanged when the name does not match, so nothing is altered by surprise.
+   - Received replies: show `@[Name]` as it is, or tidy it to `@Name`. Possibly mark one addressed to this radio's name.
+4. Later: radio battery in ATAK, and moving the repository to Colorado Mesh if they agree.
 
 In Claude cloud sessions, `./gradlew` cannot fetch Gradle or dependencies. The plain modules' tests can still be run with the Kotlin compiler and JUnit bundled in a local Gradle install. The app is only compiled in CI.
 
