@@ -16,7 +16,7 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
   - Sensors use the sensor symbol.
   - Filters by node type and by last-heard age (default: hide nodes not heard for 7 days); dropped nodes are deleted from ATAK at once.
 - **Every channel the radio reports is a contact in ATAK.**
-  - Names: `#name` for hashtag channels, a lock for private channels, plain `Public` for the default channel.
+  - Names: every channel starts with `#` so they group together at the top of ATAK's contact list: `#Public`, `#name` for hashtag channels, `#🔒 name` for private channels (changed 2026-10-12; on a device, earlier names put private channels among the nodes).
   - The kind is worked out by comparing the channel key with the Public key and the key a hashtag name gives; the key is never stored.
   - Channel text arrives as messages from that contact; a message sent to it goes out on that channel. Messages received before ATAK connects are held (up to 50).
 - **Direct messages** between the ATAK user and companion nodes, both ways, with acknowledgements logged as delivered (tested 2026-10-12).

@@ -161,13 +161,15 @@ class MeshPicture {
     private fun uidFor(channelIndex: Int) = "MESHCORE-CH-$channelIndex"
 
     /**
-     * How a channel is named in ATAK: a hashtag channel with its #, a private one behind a lock,
-     * and Public as it is.
+     * How a channel is named in ATAK. Every channel starts with `#`, so ATAK's alphabetical
+     * contact list keeps them together, ahead of the nodes: `#Public`, a hashtag channel as
+     * MeshCore writes it, and a private channel with a lock after the `#`. The lock sorts after
+     * letters, so the private channels follow the others within the group.
      */
-    private fun callsign(channel: Channel, name: String) = when (channel.kind) {
+    internal fun callsign(channel: Channel, name: String) = when (channel.kind) {
         Channel.Kind.HASHTAG -> if (name.startsWith("#")) name else "#$name"
-        Channel.Kind.PRIVATE -> "\uD83D\uDD12 $name"
-        Channel.Kind.PUBLIC -> name
+        Channel.Kind.PRIVATE -> "#$LOCK $name"
+        Channel.Kind.PUBLIC -> if (name.startsWith("#")) name else "#$name"
     }
 
     /** The most text ATAK may send on a channel: the radio puts its own name and ": " in front. */
@@ -314,6 +316,7 @@ class MeshPicture {
             "Dark Blue", "Blue", "Cyan", "Teal", "Green", "Dark Green", "Brown",
         )
         const val DEFAULT_COMPANION_TEAM = "Cyan"
+        private const val LOCK = "🔒"
         private const val MAX_ICON_PATH = 256
 
         /** True for `<set uid>/<group>/<file>` with nothing that could break out of an XML attribute. */
