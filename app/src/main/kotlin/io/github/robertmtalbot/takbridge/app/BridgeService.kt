@@ -75,18 +75,24 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
             return START_NOT_STICKY
         }
         startInForeground()
+        loadStyle()
         worker.execute { startServer() }
         when (intent?.action) {
             ACTION_CONNECT_RADIO -> intent.getStringExtra(EXTRA_ADDRESS)?.let {
                 chooseRadio(it, intent.getStringExtra(EXTRA_NAME) ?: "radio")
             }
             ACTION_DISCONNECT_RADIO -> forgetRadio()
+            ACTION_RELOAD_STYLE -> worker.execute { sendMarkers() }
             else -> resumeSavedRadio()
         }
         return START_STICKY
     }
 
-    private fun prefs() = getSharedPreferences("bridge", Context.MODE_PRIVATE)
+    private fun prefs() = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    private fun loadStyle() {
+        mesh.relayIconPath = prefs().getString(PREF_RELAY_ICON, null)?.takeIf { MeshPicture.isIconPath(it) }
+    }
 
     /** The user picked a radio: remember it, and keep it connected until told otherwise. */
     private fun chooseRadio(address: String, name: String) {
@@ -392,6 +398,9 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         const val ACTION_DISCONNECT_RADIO = "io.github.robertmtalbot.takbridge.DISCONNECT_RADIO"
         const val EXTRA_ADDRESS = "address"
         const val EXTRA_NAME = "name"
+        const val ACTION_RELOAD_STYLE = "io.github.robertmtalbot.takbridge.RELOAD_STYLE"
+        const val PREFS = "bridge"
+        const val PREF_RELAY_ICON = "relay_icon"
         private const val PREF_ADDRESS = "radio_address"
         private const val PREF_NAME = "radio_name"
 

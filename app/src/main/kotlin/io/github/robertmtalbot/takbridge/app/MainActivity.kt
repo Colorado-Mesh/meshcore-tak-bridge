@@ -9,7 +9,9 @@ import android.os.Build
 import android.os.Bundle
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+import android.text.InputType
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -65,6 +67,7 @@ class MainActivity : Activity() {
         column.addView(radioView, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         column.addView(radioButton, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
         column.addView(radioList, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        column.addView(iconSection(pad), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         column.addView(setupView, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         column.addView(logView, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         setContentView(ScrollView(this).apply { addView(column) })
@@ -175,6 +178,55 @@ class MainActivity : Activity() {
                 .putExtra(BridgeService.EXTRA_ADDRESS, radio.address)
                 .putExtra(BridgeService.EXTRA_NAME, radio.name.removeSuffix(" (paired)")),
         )
+    }
+
+    /** Lets the user give repeaters and room servers an icon from an icon set installed in ATAK. */
+    private fun iconSection(pad: Int): LinearLayout {
+        val prefs = getSharedPreferences(BridgeService.PREFS, MODE_PRIVATE)
+        val field = EditText(this).apply {
+            setText(prefs.getString(BridgeService.PREF_RELAY_ICON, ""))
+            hint = "icon set UID/group/file name"
+            textSize = 13f
+            isSingleLine = true
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+        }
+        val save = Button(this).apply {
+            text = "Save icon"
+            setOnClickListener {
+                val path = field.text.toString().trim()
+                if (path.isNotEmpty() && !MeshPicture.isIconPath(path)) {
+                    BridgeStatus.log("Icon not saved: it must be icon set UID/group/file name")
+                    return@setOnClickListener
+                }
+                prefs.edit().putString(BridgeService.PREF_RELAY_ICON, path).apply()
+                BridgeStatus.log(if (path.isEmpty()) "Repeaters will use the installation symbol" else "Repeater icon saved")
+                if (BridgeStatus.current().running) {
+                    startForegroundService(serviceIntent().setAction(BridgeService.ACTION_RELOAD_STYLE))
+                }
+            }
+        }
+        val geoOps = Button(this).apply {
+            text = "Use GeoOps Repeater"
+            isAllCaps = false
+            setOnClickListener { field.setText(MeshPicture.GEOOPS_REPEATER_ICON) }
+        }
+        val buttons = LinearLayout(this).apply {
+            addView(save)
+            addView(geoOps)
+        }
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, pad, 0, 0)
+            addView(TextView(context).apply { text = "Icon for repeaters and room servers (optional)" })
+            addView(field, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+            addView(buttons)
+            addView(
+                TextView(context).apply {
+                    textSize = 12f
+                    text = "The icon set must be installed in ATAK. Leave empty for the standard installation symbol."
+                },
+            )
+        }
     }
 
     private fun serviceIntent() = Intent(this, BridgeService::class.java)

@@ -30,6 +30,13 @@ class MeshPicture {
     private var rooms: Map<String, Channel> = emptyMap()
     private val contacts = ConcurrentHashMap<String, Contact>()
 
+    /**
+     * Icon for repeaters and room servers, as `<icon set uid>/<group>/<file>`, or null for the
+     * plain installation symbol. ATAK draws the symbol anyway when it lacks the icon set.
+     */
+    @Volatile
+    var relayIconPath: String? = null
+
     val hasRadio: Boolean
         get() = self != null
 
@@ -106,6 +113,7 @@ class MeshPicture {
                     callsign = contact.name.ifEmpty { contact.publicKeyHex.take(8) },
                     latitude = contact.latitude,
                     longitude = contact.longitude,
+                    iconsetPath = relayIconPath.takeIf { contact.type == Contact.TYPE_REPEATER || contact.type == Contact.TYPE_ROOM_SERVER },
                     team = if (companion) "Cyan" else null,
                     role = if (companion) "Team Member" else null,
                     remarks = "MeshCore ${kind(contact.type)}, last advert ${TIME.format(Instant.ofEpochSecond(contact.lastAdvert))} UTC",
@@ -158,7 +166,18 @@ class MeshPicture {
         sentAt = sentAt,
     )
 
-    private companion object {
-        val TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneOffset.UTC)
+    companion object {
+        /** The Repeater icon in the GeoOps icon set's WildFire group. */
+        const val GEOOPS_REPEATER_ICON = "83198b4872a8c34eb9c549da8a4de5a28f07821185b39a2277948f66c24ac17a/WildFire/Repeater.png"
+        private const val MAX_ICON_PATH = 256
+
+        /** True for `<set uid>/<group>/<file>` with nothing that could break out of an XML attribute. */
+        fun isIconPath(value: String): Boolean {
+            if (value.length > MAX_ICON_PATH || value.any { it in "<>\"'&" || it.isISOControl() }) return false
+            val parts = value.split('/')
+            return parts.size == 3 && parts.all { it.isNotBlank() }
+        }
+
+        private val TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneOffset.UTC)
     }
 }
