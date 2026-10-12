@@ -1,5 +1,8 @@
 package io.github.robertmtalbot.takbridge.protocol
 
+import java.security.MessageDigest
+import java.util.Base64
+
 /** What the radio says about itself in answer to [CompanionFrames.appStart]. */
 data class SelfInfo(
     val name: String,
@@ -51,8 +54,22 @@ data class Contact(
     }
 }
 
-/** A channel programmed into the radio. The channel's secret is never read out of the frame. */
-data class Channel(val index: Int, val name: String)
+/**
+ * A channel programmed into the radio. Its secret is only compared with the keys of the public
+ * and hashtag channels to tell which [kind] it is; it is never kept.
+ */
+data class Channel(val index: Int, val name: String, val kind: Kind = Kind.PRIVATE) {
+    enum class Kind {
+        /** MeshCore's default Public channel, whose key every radio knows. */
+        PUBLIC,
+
+        /** A `#name` channel, whose key anyone can work out from its name. */
+        HASHTAG,
+
+        /** A channel with its own key, shared only with the people meant to read it. */
+        PRIVATE,
+    }
+}
 
 /** A text message received on a channel. The text is as sent: usually `Sender name: message`. */
 data class ChannelMessage(
@@ -136,6 +153,9 @@ object CompanionFrames {
     private const val PUSH_NEW_ADVERT = 0x8A
     private const val TEXT_TYPE_PLAIN = 0
 
+    /** The key of MeshCore's default Public channel, from the firmware (base64 izOH6cXN6mrJ5e26oRXNcg==). */
+    private val PUBLIC_CHANNEL_KEY = Base64.getDecoder().decode("izOH6cXN6mrJ5e26oRXNcg==")
+
     private const val CONTACT_BYTES = 148
     private const val CHANNEL_INFO_BYTES = 50
 
@@ -210,13 +230,29 @@ object CompanionFrames {
         )
     }
 
-    /** Bytes 34 to 49 hold the channel's secret; only whether it is set is looked at. */
+    /**
+     * Bytes 34 to 49 hold the channel's secret. It is compared with the well-known keys and then
+     * dropped: only the resulting [Channel.Kind] leaves this function.
+     */
     private fun parseChannel(frame: ByteArray): CompanionFrame? {
         if (frame.size < CHANNEL_INFO_BYTES) return null
         val index = frame[1].toInt() and 0xFF
         val name = text(frame, 2, 32)
-        val programmed = name.isNotEmpty() && (34 until 50).any { frame[it].toInt() != 0 }
-        return CompanionFrame.ChannelSlot(index, if (programmed) Channel(index, name) else null)
+        val secret = frame.copyOfRange(34, 50)
+        val programmed = name.isNotEmpty() && secret.any { it.toInt() != 0 }
+        val channel = if (programmed) Channel(index, name, channelKind(name, secret)) else null
+        secret.fill(0)
+        return CompanionFrame.ChannelSlot(index, channel)
+    }
+
+    /** Public's key is fixed; a hashtag channel's key is the first 16 bytes of SHA-256 of its name. */
+    private fun channelKind(name: String, secret: ByteArray): Channel.Kind {
+        if (MessageDigest.isEqual(secret, PUBLIC_CHANNEL_KEY)) return Channel.Kind.PUBLIC
+        if (name.startsWith("#")) {
+            val derived = MessageDigest.getInstance("SHA-256").digest(name.toByteArray(Charsets.UTF_8)).copyOf(16)
+            if (MessageDigest.isEqual(secret, derived)) return Channel.Kind.HASHTAG
+        }
+        return Channel.Kind.PRIVATE
     }
 
     /** [start] is where the channel index sits: 1 in the old layout, 4 after the signal bytes in the new. */

@@ -71,4 +71,28 @@ class CompanionFramesTest {
         assertEquals(CompanionFrame.Other(0x88, 1), CompanionFrames.parse(byteArrayOf(0x88.toByte())))
         assertNull(CompanionFrames.parse(ByteArray(0)))
     }
+
+    private fun channelFrame(name: String, secret: ByteArray) =
+        byteArrayOf(0x12, 3) + name.toByteArray().copyOf(32) + secret
+
+    private fun kindOf(name: String, secret: ByteArray): Channel.Kind? =
+        ((CompanionFrames.parse(channelFrame(name, secret)) as CompanionFrame.ChannelSlot).channel)?.kind
+
+    @Test
+    fun recognisesThePublicChannelByItsKey() {
+        val publicKey = java.util.Base64.getDecoder().decode("izOH6cXN6mrJ5e26oRXNcg==")
+        assertEquals(Channel.Kind.PUBLIC, kindOf("Public", publicKey))
+    }
+
+    @Test
+    fun recognisesAHashtagChannelByTheKeyItsNameGives() {
+        val key = java.security.MessageDigest.getInstance("SHA-256").digest("#denver".toByteArray()).copyOf(16)
+        assertEquals(Channel.Kind.HASHTAG, kindOf("#denver", key))
+    }
+
+    @Test
+    fun aHashtagNameWithItsOwnKeyIsPrivate() {
+        assertEquals(Channel.Kind.PRIVATE, kindOf("#denver", ByteArray(16) { 9 }))
+        assertEquals(Channel.Kind.PRIVATE, kindOf("Team", ByteArray(16) { 9 }))
+    }
 }

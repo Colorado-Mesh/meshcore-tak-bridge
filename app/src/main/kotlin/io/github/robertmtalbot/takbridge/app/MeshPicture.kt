@@ -84,14 +84,21 @@ class MeshPicture {
 
     /** The channel a chat event from ATAK is for, going by the contact it was addressed to. */
     fun channelFor(room: String, roomId: String?): Channel? =
-        rooms.values.firstOrNull { uidFor(it.index) == roomId } ?: rooms.entries.firstOrNull { callsign(it.key) == room }?.value
+        rooms.values.firstOrNull { uidFor(it.index) == roomId } ?: rooms.entries.firstOrNull { callsign(it.value, it.key) == room }?.value
 
     private fun nameFor(channelIndex: Int): String? = rooms.entries.firstOrNull { it.value.index == channelIndex }?.key
 
     private fun uidFor(channelIndex: Int) = "MESHCORE-CH-$channelIndex"
 
-    /** `#Public`, as MeshCore writes hashtag channels; a name that already starts with # keeps its one. */
-    private fun callsign(channelName: String) = if (channelName.startsWith("#")) channelName else "#$channelName"
+    /**
+     * How a channel is named in ATAK: a hashtag channel with its #, a private one behind a lock,
+     * and Public as it is.
+     */
+    private fun callsign(channel: Channel, name: String) = when (channel.kind) {
+        Channel.Kind.HASHTAG -> if (name.startsWith("#")) name else "#$name"
+        Channel.Kind.PRIVATE -> "\uD83D\uDD12 $name"
+        Channel.Kind.PUBLIC -> name
+    }
 
     /** The most text ATAK may send on a channel: the radio puts its own name and ": " in front. */
     fun maxTextBytes(): Int {
@@ -109,7 +116,7 @@ class MeshPicture {
                 MarkerSpec(
                     uid = uidFor(channel.index),
                     cotType = "a-f-G-U-C",
-                    callsign = callsign(name),
+                    callsign = callsign(channel, name),
                     latitude = 0.0,
                     longitude = 0.0,
                     team = "White",
@@ -184,7 +191,7 @@ class MeshPicture {
         room = atak.callsign,
         roomId = atak.uid,
         senderUid = uidFor(channelIndex),
-        senderCallsign = callsign(name),
+        senderCallsign = rooms[name]?.let { callsign(it, name) } ?: name,
         text = text,
         messageId = id,
         sentAt = sentAt,
