@@ -125,7 +125,16 @@ The server speaks Cursor on Target (CoT) XML. Each behaviour below was found nec
 
 The bridge learns who the ATAK user is (callsign and uid) from the first position report ATAK sends, because chat is addressed to that user.
 
-ATAK also polls a TAK server's web API on port 8080. With nothing listening, it kept showing "Failed to get server contacts … connection to http://127.0.0.1:8080 refused". The bridge now runs a minimal responder on `127.0.0.1:8080` (`ApiServer`) that answers only that poll, `GET /Marti/api/clientEndPoints`. The reply is an empty list in the form ATAK's `GetClientListOperation` parses: `{"type":"com.bbn.marti.remote.ClientEndpoint","data":[]}`. The contacts themselves still arrive over the CoT stream. The reply leaves out the `version` field, which ATAK reads as the server's API version, so the bridge does not claim an API it lacks. Anything else gets 404, and the bridge logs each such path once, so a device test shows whether ATAK wants more. If another app holds port 8080, the bridge carries on without it.
+ATAK also asks a TAK server's web API on port 8080 for several things each time it connects. With nothing listening, it kept showing "Failed to get server contacts … connection to http://127.0.0.1:8080 refused". Once contacts were answered, it showed "Failed to get server groups … (error 404)" next. The bridge now runs a minimal responder on `127.0.0.1:8080` (`ApiServer`). It answers the requests ATAK makes on its own at connect, each with nothing, in the forms ATAK's open-source code parses:
+
+| Request | Answer |
+| --- | --- |
+| `GET /Marti/api/clientEndPoints` (server contacts) | `{"type":"com.bbn.marti.remote.ClientEndpoint","data":[]}` |
+| `GET /Marti/api/groups/all` (server groups, for ATAK's Channels feature) | `{"type":"com.bbn.marti.remote.groups.Group","data":[]}` |
+| `GET /Marti/api/device/profile/…` (settings profiles) | 204 No Content, which ATAK reads as "nothing new" |
+| `GET /Marti/api/version` and `/version/config` | 404; ATAK only logs this |
+
+The contacts and channels themselves still arrive over the CoT stream. No answer carries a `version` field, which ATAK reads as the server's API version, so the bridge claims no TAK Server features it lacks. The other paths in ATAK's code (mission packages, certificate enrollment, CoT history) are used only when the user asks for them. They get 404, and the bridge logs each such path once, so a device test shows whether a newer ATAK wants more. The public ATAK source is version 4.x; the messages above came from a newer ATAK. If another app holds port 8080, the bridge carries on without the responder.
 
 Setting up ATAK is one step: add a server with address `127.0.0.1`, port `8087`, protocol TCP.
 

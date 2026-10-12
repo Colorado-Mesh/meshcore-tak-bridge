@@ -9,13 +9,12 @@ import java.net.Socket
 /**
  * The smallest part of a TAK server's web API that ATAK asks for, so it stops reporting errors.
  *
- * Besides the CoT stream, ATAK polls a TAK server's web API on port 8080 for the server's
- * contact list (`GET /Marti/api/clientEndPoints`) and shows "Failed to get server contacts" when
- * nothing answers. This answers that request with an empty list, in the form ATAK's
- * `GetClientListOperation` parses: a `type` naming the client-endpoint class and a `data`
- * array. The contacts themselves already reach ATAK through the CoT stream.
+ * Besides the CoT stream, ATAK asks a TAK server's web API on port 8080 for a few things each
+ * time it connects, and shows errors such as "Failed to get server contacts" or "Failed to get
+ * server groups" when they fail. [respond] lists what is answered; every answer is empty. The
+ * contacts and channels themselves reach ATAK through the CoT stream.
  *
- * The reply has no `version` field. ATAK reads the server's API version from it, and the bridge
+ * No reply has a `version` field. ATAK reads the server's API version from it, and the bridge
  * should not claim to support an API it does not provide. Any other request gets 404, and its
  * path is reported once to [onUnknownPath] so that a device test shows what else ATAK wants.
  *
@@ -80,8 +79,9 @@ class ApiServer(
                 val (status, body) = respond(method, path)
                 if (status == NOT_FOUND) reportOnce("$method $path")
                 val bytes = body.toByteArray(Charsets.UTF_8)
+                val type = if (bytes.isEmpty()) "" else "Content-Type: application/json; charset=utf-8\r\n"
                 val header = "HTTP/1.1 $status\r\n" +
-                    "Content-Type: application/json; charset=utf-8\r\n" +
+                    type +
                     "Content-Length: ${bytes.size}\r\n" +
                     "Connection: close\r\n\r\n"
                 val out = it.getOutputStream()
@@ -118,19 +118,37 @@ class ApiServer(
         /** The JSON type ATAK checks for in a client-list reply. */
         const val CLIENT_LIST_TYPE = "com.bbn.marti.remote.ClientEndpoint"
 
+        /** The JSON type ATAK checks for in a group-list reply. */
+        const val GROUP_LIST_TYPE = "com.bbn.marti.remote.groups.Group"
+
         internal const val OK = "200 OK"
+        internal const val NO_CONTENT = "204 No Content"
         internal const val NOT_FOUND = "404 Not Found"
         private const val BACKLOG = 4
         private const val READ_TIMEOUT_MS = 5_000
         private const val MAX_HEAD_BYTES = 8_192
         private const val MAX_REPORTED = 20
+        private val SLASHES = Regex("/+")
 
-        /** What to answer for [method] and [path], as an HTTP status line and a JSON body. */
-        internal fun respond(method: String, path: String): Pair<String, String> =
-            if ((method == "GET" || method == "HEAD") && path.trimEnd('/') == "/Marti/api/clientEndPoints") {
-                OK to "{\"type\":\"$CLIENT_LIST_TYPE\",\"data\":[]}"
-            } else {
-                NOT_FOUND to "{}"
+        /**
+         * What to answer for [method] and [path], as an HTTP status line and a body, for the
+         * requests ATAK makes on its own whenever it connects to a server:
+         * - the server's contacts: an empty list;
+         * - the server's groups (ATAK's Channels feature): an empty list, which ATAK accepts;
+         * - a device or tool profile: 204, which ATAK reads as "nothing new", not as an error.
+         *
+         * The server version is not answered: ATAK only logs that failure, and an answer would
+         * claim TAK Server features the bridge lacks.
+         */
+        internal fun respond(method: String, path: String): Pair<String, String> {
+            if (method != "GET" && method != "HEAD") return NOT_FOUND to "{}"
+            val clean = path.replace(SLASHES, "/").trimEnd('/')
+            return when {
+                clean == "/Marti/api/clientEndPoints" -> OK to "{\"type\":\"$CLIENT_LIST_TYPE\",\"data\":[]}"
+                clean == "/Marti/api/groups/all" -> OK to "{\"type\":\"$GROUP_LIST_TYPE\",\"data\":[]}"
+                clean.startsWith("/Marti/api/device/profile/") -> NO_CONTENT to ""
+                else -> NOT_FOUND to "{}"
             }
+        }
     }
 }

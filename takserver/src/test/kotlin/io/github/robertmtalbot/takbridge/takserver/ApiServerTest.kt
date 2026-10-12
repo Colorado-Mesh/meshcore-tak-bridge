@@ -43,8 +43,34 @@ class ApiServerTest {
 
     @Test
     fun claimsNoApiVersion() {
-        val (_, body) = ApiServer.respond("GET", "/Marti/api/clientEndPoints")
-        assertTrue(!body.contains("version"))
+        for (path in listOf("/Marti/api/clientEndPoints", "/Marti/api/groups/all")) {
+            assertTrue(!ApiServer.respond("GET", path).second.contains("version"))
+        }
+        assertEquals(ApiServer.NOT_FOUND, ApiServer.respond("GET", "/Marti/api/version/config").first)
+        assertEquals(ApiServer.NOT_FOUND, ApiServer.respond("GET", "/Marti/api/version").first)
+    }
+
+    @Test
+    fun answersAtaksGroupRequestWithAnEmptyList() {
+        val port = server.start()
+        val reply = request(port, "/Marti/api/groups/all?useCache=true")
+        assertTrue(reply, reply.startsWith("HTTP/1.1 200 OK"))
+        assertEquals("{\"type\":\"com.bbn.marti.remote.groups.Group\",\"data\":[]}", reply.substringAfter("\r\n\r\n"))
+    }
+
+    @Test
+    fun aDeviceProfileRequestGetsNoContent() {
+        val port = server.start()
+        val reply = request(port, "/Marti/api/device/profile/connection?syncSecago=-1&clientUid=ANDROID-1")
+        assertTrue(reply, reply.startsWith("HTTP/1.1 204 No Content"))
+        assertTrue(reply.contains("Content-Length: 0"))
+        assertTrue(!reply.contains("Content-Type"))
+        assertEquals("", reply.substringAfter("\r\n\r\n"))
+    }
+
+    @Test
+    fun doubledSlashesInAPathStillMatch() {
+        assertEquals(ApiServer.OK, ApiServer.respond("GET", "/Marti//api/groups/all").first)
     }
 
     @Test
