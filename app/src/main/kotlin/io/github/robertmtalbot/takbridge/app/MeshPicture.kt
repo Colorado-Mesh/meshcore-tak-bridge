@@ -37,6 +37,25 @@ class MeshPicture {
     @Volatile
     var relayIconPath: String? = null
 
+    /** Node types to put on the map, as `Contact.TYPE_` values. Kinds this app does not know always show. */
+    @Volatile
+    var shownTypes: Set<Int> = ALL_TYPES
+
+    /** Leave off nodes whose last advert is older than this many seconds; null shows them all. */
+    @Volatile
+    var maxAgeSeconds: Long? = null
+
+    /** Whether a node goes on the map under the current filters. [nowSeconds] is Unix time. */
+    fun isShown(contact: Contact, nowSeconds: Long): Boolean {
+        if (!contact.hasPosition) return false
+        if (contact.type in ALL_TYPES && contact.type !in shownTypes) return false
+        val limit = maxAgeSeconds ?: return true
+        // A sender's clock can be wrong; an advert dated in the future counts as fresh.
+        return nowSeconds - contact.lastAdvert <= limit
+    }
+
+    fun markerUid(contact: Contact) = "MESHCORE-${contact.publicKeyHex.take(16)}"
+
     val hasRadio: Boolean
         get() = self != null
 
@@ -80,7 +99,7 @@ class MeshPicture {
     }
 
     /** A contact for every channel, then every node that shares a position. */
-    fun markers(): List<MarkerSpec> {
+    fun markers(nowSeconds: Long = System.currentTimeMillis() / 1000): List<MarkerSpec> {
         if (self == null) return emptyList()
         val list = ArrayList<MarkerSpec>()
         for ((name, channel) in rooms) {
@@ -100,11 +119,11 @@ class MeshPicture {
             )
         }
         for (contact in contacts.values) {
-            if (!contact.hasPosition) continue
+            if (!isShown(contact, nowSeconds)) continue
             val companion = contact.type == Contact.TYPE_COMPANION
             list.add(
                 MarkerSpec(
-                    uid = "MESHCORE-${contact.publicKeyHex.take(16)}",
+                    uid = markerUid(contact),
                     cotType = when (contact.type) {
                         Contact.TYPE_COMPANION -> "a-f-G-U-C"
                         Contact.TYPE_SENSOR -> "a-f-G-E-S"
@@ -123,8 +142,12 @@ class MeshPicture {
         return list
     }
 
+    /** Nodes on the map under the current filters. */
     val positionedCount: Int
-        get() = contacts.values.count { it.hasPosition }
+        get() {
+            val now = System.currentTimeMillis() / 1000
+            return contacts.values.count { isShown(it, now) }
+        }
 
     val contactCount: Int
         get() = contacts.size
@@ -167,6 +190,9 @@ class MeshPicture {
     )
 
     companion object {
+        val ALL_TYPES: Set<Int> =
+            setOf(Contact.TYPE_COMPANION, Contact.TYPE_REPEATER, Contact.TYPE_ROOM_SERVER, Contact.TYPE_SENSOR)
+
         /** The Repeater icon in the GeoOps icon set's WildFire group. */
         const val GEOOPS_REPEATER_ICON = "83198b4872a8c34eb9c549da8a4de5a28f07821185b39a2277948f66c24ac17a/WildFire/Repeater.png"
         private const val MAX_ICON_PATH = 256

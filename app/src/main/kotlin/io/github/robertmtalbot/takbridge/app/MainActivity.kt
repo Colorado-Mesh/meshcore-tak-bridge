@@ -10,13 +10,20 @@ import android.os.Bundle
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.text.InputType
+import android.view.View
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.CheckBox
+import android.widget.HorizontalScrollView
+import android.widget.Spinner
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import io.github.robertmtalbot.takbridge.app.ble.FoundRadio
 import io.github.robertmtalbot.takbridge.app.ble.RadioScanner
+import io.github.robertmtalbot.takbridge.protocol.Contact
 import io.github.robertmtalbot.takbridge.takserver.TakServer
 
 /**
@@ -67,6 +74,7 @@ class MainActivity : Activity() {
         column.addView(radioView, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         column.addView(radioButton, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
         column.addView(radioList, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        column.addView(filterSection(pad), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         column.addView(iconSection(pad), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         column.addView(setupView, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         column.addView(logView, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
@@ -180,6 +188,66 @@ class MainActivity : Activity() {
         )
     }
 
+    /** Which nodes go on the ATAK map: by type, and by how recently they were heard. */
+    private fun filterSection(pad: Int): LinearLayout {
+        val prefs = getSharedPreferences(BridgeService.PREFS, MODE_PRIVATE)
+        val section = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, pad, 0, 0)
+        }
+        section.addView(TextView(this).apply { text = "Nodes on the map" })
+        val shown = prefs.getStringSet(BridgeService.PREF_SHOWN_TYPES, null)?.toSet()
+            ?: MeshPicture.ALL_TYPES.map { it.toString() }.toSet()
+        val boxes = TYPE_LABELS.map { (type, label) ->
+            CheckBox(this).apply {
+                text = label
+                isChecked = type.toString() in shown
+            }
+        }
+        fun saveTypes() {
+            val chosen = TYPE_LABELS.indices.filter { boxes[it].isChecked }.map { TYPE_LABELS[it].first.toString() }.toSet()
+            prefs.edit().putStringSet(BridgeService.PREF_SHOWN_TYPES, chosen).apply()
+            applyMapSettings()
+        }
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        for (box in boxes) {
+            box.setOnCheckedChangeListener { _, _ -> saveTypes() }
+            row.addView(box)
+        }
+        section.addView(HorizontalScrollView(this).apply { addView(row) })
+
+        val ages = AGE_CHOICES
+        val current = prefs.getInt(BridgeService.PREF_MAX_AGE_HOURS, BridgeService.DEFAULT_MAX_AGE_HOURS)
+        val spinner = Spinner(this).apply {
+            adapter = ArrayAdapter(context, android.R.layout.simple_spinner_dropdown_item, ages.map { it.second })
+            setSelection(ages.indexOfFirst { it.first == current }.coerceAtLeast(0))
+            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                    val hours = ages[position].first
+                    if (hours == prefs.getInt(BridgeService.PREF_MAX_AGE_HOURS, BridgeService.DEFAULT_MAX_AGE_HOURS)) return
+                    prefs.edit().putInt(BridgeService.PREF_MAX_AGE_HOURS, hours).apply()
+                    applyMapSettings()
+                }
+
+                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+            }
+        }
+        val ageRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(TextView(context).apply { text = "Hide nodes not heard for" })
+            addView(spinner)
+        }
+        section.addView(ageRow)
+        return section
+    }
+
+    /** Tells a running bridge to re-read the map settings and update ATAK. */
+    private fun applyMapSettings() {
+        if (BridgeStatus.current().running) {
+            startForegroundService(serviceIntent().setAction(BridgeService.ACTION_RELOAD_STYLE))
+        }
+    }
+
     /** Lets the user give repeaters and room servers an icon from an icon set installed in ATAK. */
     private fun iconSection(pad: Int): LinearLayout {
         val prefs = getSharedPreferences(BridgeService.PREFS, MODE_PRIVATE)
@@ -200,9 +268,7 @@ class MainActivity : Activity() {
                 }
                 prefs.edit().putString(BridgeService.PREF_RELAY_ICON, path).apply()
                 BridgeStatus.log(if (path.isEmpty()) "Repeaters will use the installation symbol" else "Repeater icon saved")
-                if (BridgeStatus.current().running) {
-                    startForegroundService(serviceIntent().setAction(BridgeService.ACTION_RELOAD_STYLE))
-                }
+                applyMapSettings()
             }
         }
         val geoOps = Button(this).apply {
@@ -253,6 +319,22 @@ class MainActivity : Activity() {
 
     private companion object {
         const val REQUEST_BLUETOOTH = 1
+
+        val TYPE_LABELS = listOf(
+            Contact.TYPE_COMPANION to "Companions",
+            Contact.TYPE_REPEATER to "Repeaters",
+            Contact.TYPE_ROOM_SERVER to "Room servers",
+            Contact.TYPE_SENSOR to "Sensors",
+        )
+
+        /** Hours, and how each choice reads; 0 means never hide. */
+        val AGE_CHOICES = listOf(
+            24 to "1 day",
+            3 * 24 to "3 days",
+            7 * 24 to "7 days",
+            30 * 24 to "30 days",
+            0 to "never hide",
+        )
 
         val SETUP_TEXT = """
             To use the bridge:

@@ -29,6 +29,7 @@ import io.github.robertmtalbot.takbridge.takserver.TakServer
 import io.github.robertmtalbot.takbridge.takserver.TakServerListener
 import java.io.IOException
 import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
@@ -49,6 +50,9 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
     @Volatile
     private var radio: RadioSession? = null
     private val mesh = MeshPicture()
+
+    /** Uids of the markers ATAK currently has from this bridge, so that dropped ones can be removed. */
+    private val onMap: MutableSet<String> = ConcurrentHashMap.newKeySet()
     private val main = Handler(Looper.getMainLooper())
 
     /** The radio the user chose, by Bluetooth address; null when none is chosen. Main thread only. */
@@ -83,7 +87,7 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
             }
             ACTION_DISCONNECT_RADIO -> forgetRadio()
             ACTION_RELOAD_STYLE -> {
-                BridgeStatus.log("Repeater icon in use: ${mesh.relayIconPath ?: "installation symbol"}")
+                BridgeStatus.log("Map settings applied; ${mesh.positionedCount} nodes shown")
                 worker.execute { sendMarkers() }
             }
             else -> resumeSavedRadio()
@@ -94,7 +98,12 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
     private fun prefs() = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     private fun loadStyle() {
-        mesh.relayIconPath = prefs().getString(PREF_RELAY_ICON, null)?.takeIf { MeshPicture.isIconPath(it) }
+        val prefs = prefs()
+        mesh.relayIconPath = prefs.getString(PREF_RELAY_ICON, null)?.takeIf { MeshPicture.isIconPath(it) }
+        mesh.shownTypes = prefs.getStringSet(PREF_SHOWN_TYPES, null)
+            ?.mapNotNull { it.toIntOrNull() }?.toSet() ?: MeshPicture.ALL_TYPES
+        val hours = prefs.getInt(PREF_MAX_AGE_HOURS, DEFAULT_MAX_AGE_HOURS)
+        mesh.maxAgeSeconds = if (hours > 0) hours * 3600L else null
     }
 
     /** The user picked a radio: remember it, and keep it connected until told otherwise. */
@@ -182,7 +191,7 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
 
     override fun onContact(contact: Contact) {
         mesh.putContact(contact)
-        if (contact.hasPosition) server?.let { active -> sendMeshMarkers(active, only = contact) }
+        server?.let { active -> sendMeshMarkers(active, only = contact) }
     }
 
     override fun onChannels(channels: List<Channel>) {
@@ -242,13 +251,34 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         for (message in held) deliver(message, atak)
     }
 
+    /**
+     * Send the mesh markers, or just the one for [only]. A node the filters now leave out is
+     * removed from ATAK at once rather than left to go stale.
+     */
     private fun sendMeshMarkers(active: TakServer, only: Contact? = null) {
         if (!active.hasClient) return
         val now = Instant.now()
-        val wanted = only?.let { "MESHCORE-${it.publicKeyHex.take(16)}" }
-        for (marker in mesh.markers()) {
-            if (wanted == null || marker.uid == wanted) active.send(CotEvents.marker(marker, now))
+        val markers = mesh.markers(now.epochSecond)
+        if (only != null) {
+            val uid = mesh.markerUid(only)
+            val marker = markers.firstOrNull { it.uid == uid }
+            if (marker != null) {
+                active.send(CotEvents.marker(marker, now))
+                onMap.add(uid)
+            } else if (onMap.remove(uid)) {
+                active.send(CotEvents.delete(uid, now))
+            }
+            return
         }
+        val current = markers.mapTo(HashSet()) { it.uid }
+        for (marker in markers) active.send(CotEvents.marker(marker, now))
+        for (uid in onMap.toList()) {
+            if (uid !in current) {
+                active.send(CotEvents.delete(uid, now))
+                onMap.remove(uid)
+            }
+        }
+        onMap.addAll(current)
     }
 
     override fun onDestroy() {
@@ -332,6 +362,7 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
     override fun onClientConnected() {
         BridgeStatus.update { it.copy(clientConnected = true) }
         identity = null
+        onMap.clear()
         if (mesh.hasRadio) {
             BridgeStatus.log("ATAK connected; sending ${mesh.positionedCount} mesh nodes and ${mesh.channelCount} channels")
             sendPicture()
@@ -404,6 +435,11 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         const val ACTION_RELOAD_STYLE = "io.github.robertmtalbot.takbridge.RELOAD_STYLE"
         const val PREFS = "bridge"
         const val PREF_RELAY_ICON = "relay_icon"
+        const val PREF_SHOWN_TYPES = "shown_types"
+        const val PREF_MAX_AGE_HOURS = "max_age_hours"
+
+        /** Nodes silent for a week are left off the map unless the user chooses otherwise. */
+        const val DEFAULT_MAX_AGE_HOURS = 7 * 24
         private const val PREF_ADDRESS = "radio_address"
         private const val PREF_NAME = "radio_name"
 
