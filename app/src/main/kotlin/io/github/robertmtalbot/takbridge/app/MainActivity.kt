@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.text.InputType
+import android.view.Gravity
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
@@ -219,7 +220,7 @@ class MainActivity : Activity() {
         val ages = AGE_CHOICES
         val current = prefs.getInt(BridgeService.PREF_MAX_AGE_HOURS, BridgeService.DEFAULT_MAX_AGE_HOURS)
         val spinner = Spinner(this).apply {
-            adapter = ArrayAdapter(context, android.R.layout.simple_spinner_dropdown_item, ages.map { it.second })
+            adapter = choices(ages.map { it.second })
             setSelection(ages.indexOfFirst { it.first == current }.coerceAtLeast(0))
             onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
@@ -232,13 +233,31 @@ class MainActivity : Activity() {
                 override fun onNothingSelected(parent: AdapterView<*>?) = Unit
             }
         }
-        val ageRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            addView(TextView(context).apply { text = "Hide nodes not heard for" })
-            addView(spinner)
-        }
-        section.addView(ageRow)
+        section.addView(labelledRow("Hide nodes not heard for", spinner, dp(4)))
         return section
+    }
+
+    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+
+    /**
+     * Choices for a drop-down list: the compact item layout while closed, the roomy one when
+     * open. Using the drop-down layout for both made the closed list tall and wide.
+     */
+    private fun choices(items: List<String>) =
+        ArrayAdapter(this, android.R.layout.simple_spinner_item, items).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+
+    /**
+     * A label with a drop-down list beside it. The label takes the room left over and wraps if
+     * it must, so a long choice never pushes the list off the screen.
+     */
+    private fun labelledRow(label: String, spinner: Spinner, topPad: Int) = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(0, topPad, 0, 0)
+        addView(TextView(context).apply { text = label }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        addView(spinner, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
     }
 
     /** Tells a running bridge to re-read the map settings and update ATAK. */
@@ -256,10 +275,11 @@ class MainActivity : Activity() {
             setPadding(0, pad, 0, 0)
         }
         section.addView(iconRow("Repeater icon (optional)", "Repeaters", BridgeService.PREF_RELAY_ICON))
-        section.addView(iconRow("Room server icon (optional)", "Room servers", BridgeService.PREF_ROOM_ICON))
+        section.addView(iconRow("Room server icon (optional)", "Room servers", BridgeService.PREF_ROOM_ICON, topPad = pad))
         section.addView(
             TextView(this).apply {
                 textSize = 12f
+                setPadding(0, dp(8), 0, 0)
                 text = "Icons come from an icon set installed in ATAK. Leave a field empty for the standard installation symbol."
             },
         )
@@ -267,7 +287,7 @@ class MainActivity : Activity() {
         val teams = MeshPicture.TEAM_COLOURS
         val current = prefs.getString(BridgeService.PREF_COMPANION_TEAM, MeshPicture.DEFAULT_COMPANION_TEAM)
         val spinner = Spinner(this).apply {
-            adapter = ArrayAdapter(context, android.R.layout.simple_spinner_dropdown_item, teams)
+            adapter = choices(teams)
             setSelection(teams.indexOf(current).coerceAtLeast(0))
             onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
@@ -281,22 +301,16 @@ class MainActivity : Activity() {
                 override fun onNothingSelected(parent: AdapterView<*>?) = Unit
             }
         }
-        section.addView(
-            LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                setPadding(0, pad / 2, 0, 0)
-                addView(TextView(context).apply { text = "Companion team colour" })
-                addView(spinner)
-            },
-        )
+        section.addView(labelledRow("Companion team colour", spinner, pad))
         return section
     }
 
     /**
-     * One icon setting: a path field with Save, and a list of icons from the GeoOps set that
-     * fills the field and saves in one step, so a choice cannot be left unsaved.
+     * One icon setting: a path field with Save beside it, and below them a full-width list of
+     * icons from the GeoOps set that fills the field and saves in one step, so a choice cannot
+     * be left unsaved.
      */
-    private fun iconRow(title: String, kind: String, prefKey: String): LinearLayout {
+    private fun iconRow(title: String, kind: String, prefKey: String, topPad: Int = 0): LinearLayout {
         val prefs = getSharedPreferences(BridgeService.PREFS, MODE_PRIVATE)
         val field = EditText(this).apply {
             setText(prefs.getString(prefKey, ""))
@@ -321,7 +335,7 @@ class MainActivity : Activity() {
         }
         val presets = listOf("GeoOps icon…") + MeshPicture.GEOOPS_ICONS.keys
         val presetSpinner = Spinner(this).apply {
-            adapter = ArrayAdapter(context, android.R.layout.simple_spinner_dropdown_item, presets)
+            adapter = choices(presets)
             onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                     if (position == 0) return
@@ -335,13 +349,23 @@ class MainActivity : Activity() {
         }
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            setPadding(0, topPad, 0, 0)
             addView(TextView(context).apply { text = title })
-            addView(field, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
             addView(
                 LinearLayout(context).apply {
-                    addView(saveButton)
-                    addView(presetSpinner)
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    addView(field, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                    addView(
+                        saveButton,
+                        LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(8) },
+                    )
                 },
+                LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT),
+            )
+            addView(
+                presetSpinner,
+                LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(4) },
             )
         }
     }
