@@ -32,6 +32,7 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
   - A retried copy of a received message (same sender, timestamp and text) is dropped and logged.
 - **No channel echoes** (checked 2026-10-12). A channel message sent from ATAK did not come back: the `Echo check:` log line never appeared. This matches the firmware, which marks its own flooded packets as seen. The guard stays in place: a received channel message matching one just sent from ATAK (`"<radio name>: <text>"`, same channel, within 15 minutes) is dropped and logged.
 - **Never writes to the radio's settings, channels, contacts or clock.**
+- **Colorado Mesh branding** (added 2026-10-13, not yet seen on a device): an app icon, the Colorado Mesh mark with its arc closed into a map crosshair, with a themed-icon version and a matching status bar icon; a navy header with the icon, name and version; and an About section with the licence and buttons for the source code and coloradomesh.org.
 
 ## Design decisions learned on devices
 

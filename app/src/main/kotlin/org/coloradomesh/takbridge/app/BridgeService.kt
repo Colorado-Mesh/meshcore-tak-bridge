@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.IBinder
+import org.coloradomesh.takbridge.R
 import org.coloradomesh.takbridge.app.ble.RadioSession
 import org.coloradomesh.takbridge.cot.ClientIdentity
 import org.coloradomesh.takbridge.cot.CotEvents
@@ -372,7 +373,7 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         val notification = Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("MeshCore TAK Bridge")
             .setContentText("Local TAK server running on 127.0.0.1:${TakServer.DEFAULT_PORT}")
-            .setSmallIcon(android.R.drawable.stat_notify_sync)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(open)
             .setOngoing(true)
             .build()

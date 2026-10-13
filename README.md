@@ -54,7 +54,7 @@ Every push to `main` runs the tests and builds the debug APK in GitHub Actions.
 | `takserver` | The loopback TCP server: one client, keepalive replies, inbound chat, rate limit. Also a minimal web API answer on port 8080, so ATAK's poll for server contacts does not fail. Plain Kotlin. |
 | `app` | The Android app: the Bluetooth link (`ble/`), the mesh-to-ATAK mapping (`MeshPicture`), the foreground service that ties them together, and the status and settings screen. |
 
-The plain-Kotlin modules have JUnit tests. The app is built in code with no layout resources.
+The plain-Kotlin modules have JUnit tests. The app is built in code with no layout resources; its only resources are the icons.
 
 ## Design rules
 
@@ -68,6 +68,10 @@ These come from problems seen in practice, and changes should keep to them.
 - Never send chat to a repeater or room server; they read admin text as commands.
 - Listen on `127.0.0.1` explicitly, not Android's default loopback (`::1`).
 - Events sent to ATAK are bare `<event>` elements with no XML declaration.
+
+## Icon
+
+The app icon is the Colorado Mesh mark, with its arc closed into a map crosshair, in the Colorado Mesh colours. It is drawn by [docs/icon/make_icon.py](docs/icon/make_icon.py), which writes the Android drawables and a preview, [docs/icon/icon.svg](docs/icon/icon.svg). It contains no ATAK or TAK artwork. The Colorado Mesh logo it is based on is by megabear (KD5IHC) and Johnny (W5KV), from [Colorado-Mesh/branding](https://github.com/Colorado-Mesh/branding).
 
 ## Licence
 

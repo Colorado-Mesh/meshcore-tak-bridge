@@ -2,9 +2,13 @@ package org.coloradomesh.takbridge.app
 
 import android.Manifest
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -17,19 +21,22 @@ import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.HorizontalScrollView
+import android.widget.ImageView
 import android.widget.Spinner
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import org.coloradomesh.takbridge.R
 import org.coloradomesh.takbridge.app.ble.FoundRadio
 import org.coloradomesh.takbridge.app.ble.RadioScanner
 import org.coloradomesh.takbridge.protocol.Contact
 import org.coloradomesh.takbridge.takserver.TakServer
 
 /**
- * The bridge's one screen: start and stop, connection status, how to point ATAK at it, and a
- * log of what has happened. Built in code so the app carries no layout resources yet.
+ * The bridge's one screen: a Colorado Mesh header, start and stop, connection status, how to
+ * point ATAK at it, where the project lives, and a log of what has happened. Built in code; the
+ * only resources are the icons.
  */
 class MainActivity : Activity() {
     private lateinit var statusView: TextView
@@ -81,8 +88,15 @@ class MainActivity : Activity() {
         column.addView(filterSection(pad), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         column.addView(iconSection(pad), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         column.addView(setupView, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        column.addView(aboutSection(pad), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         column.addView(logView, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
-        setContentView(ScrollView(this).apply { addView(column) })
+        val page = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(header(pad), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+            addView(column, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        }
+        window.statusBarColor = NAVY_TOP
+        setContentView(ScrollView(this).apply { addView(page) })
 
         requestNotificationPermission()
     }
@@ -414,6 +428,94 @@ class MainActivity : Activity() {
         }
     }
 
+    /** The app's icon and name on Colorado Mesh navy, over the arc's red-to-yellow line. */
+    private fun header(pad: Int): LinearLayout {
+        val title = TextView(this).apply {
+            text = "MeshCore TAK Bridge"
+            textSize = 22f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(Color.WHITE)
+        }
+        val subtitle = TextView(this).apply {
+            text = "A Colorado Mesh project" + (versionName()?.let { "  ·  v$it" } ?: "")
+            textSize = 14f
+            setTextColor(OFF_WHITE)
+        }
+        val words = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(title)
+            addView(subtitle)
+        }
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(pad, pad, pad, pad)
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(NAVY_TOP, NAVY_BOTTOM))
+            addView(
+                ImageView(context).apply {
+                    setImageResource(R.mipmap.ic_launcher)
+                    contentDescription = null
+                },
+                LinearLayout.LayoutParams(dp(56), dp(56)).apply { marginEnd = dp(12) },
+            )
+            addView(words, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        }
+        val arc = View(this).apply {
+            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(ARC_RED, ARC_YELLOW, ARC_LIGHT_YELLOW))
+        }
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(row, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+            addView(arc, LinearLayout.LayoutParams(MATCH_PARENT, dp(3)))
+        }
+    }
+
+    /** Who makes the app, its licence, and links to the source and to Colorado Mesh. */
+    private fun aboutSection(pad: Int): LinearLayout {
+        fun link(label: String, url: String) = Button(this).apply {
+            text = label
+            isAllCaps = false
+            setOnClickListener { open(url) }
+        }
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 0, 0, pad)
+            addView(
+                TextView(context).apply {
+                    text = ABOUT_TEXT
+                    setTextIsSelectable(true)
+                },
+                LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT),
+            )
+            addView(
+                LinearLayout(context).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    addView(link("Source code", REPOSITORY_URL))
+                    addView(
+                        link("coloradomesh.org", COLORADO_MESH_URL),
+                        LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(8) },
+                    )
+                },
+                LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT),
+            )
+        }
+    }
+
+    private fun open(url: String) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (e: ActivityNotFoundException) {
+            BridgeStatus.log("No app on this device can open $url")
+        }
+    }
+
+    @Suppress("DEPRECATION") // The replacement needs Android 13; this works on every version.
+    private fun versionName(): String? = try {
+        packageManager.getPackageInfo(packageName, 0).versionName
+    } catch (e: PackageManager.NameNotFoundException) {
+        null
+    }
+
     private fun serviceIntent() = Intent(this, BridgeService::class.java)
 
     private fun toggleBridge() {
@@ -434,6 +536,23 @@ class MainActivity : Activity() {
 
     private companion object {
         const val REQUEST_BLUETOOTH = 1
+
+        const val REPOSITORY_URL = "https://github.com/Colorado-Mesh/meshcore-tak-bridge"
+        const val COLORADO_MESH_URL = "https://coloradomesh.org/"
+
+        // Colorado Mesh palette (Colorado-Mesh/branding, colors/colors.css), as in the app icon.
+        val NAVY_TOP = Color.parseColor("#011033")
+        val NAVY_BOTTOM = Color.parseColor("#0A4483")
+        val ARC_RED = Color.parseColor("#DD506D")
+        val ARC_YELLOW = Color.parseColor("#F2B138")
+        val ARC_LIGHT_YELLOW = Color.parseColor("#ECC455")
+        val OFF_WHITE = Color.parseColor("#C7C7C7")
+
+        val ABOUT_TEXT = """
+            MeshCore TAK Bridge is free software from Colorado Mesh, licensed GPL-3.0-or-later.
+            Bug reports, ideas and code are welcome on GitHub.
+            Not affiliated with MeshCore or the TAK Product Center.
+        """.trimIndent()
 
         val TYPE_LABELS = listOf(
             Contact.TYPE_COMPANION to "Companions",
