@@ -250,7 +250,7 @@ Not yet in place: a simulated radio that runs the whole bridge end to end on a c
 | 4. Nodes on the map | Done, with type and age filters, team colour and icons |
 | 5. Channel chat | Done, with channels as contacts |
 | 5a. Direct messages and echo check | Done; direct messages tested both ways, no channel echoes seen |
-| 6. App shell | Mostly done: radio picker, connection status, map settings, background service |
+| 6. App shell | Mostly done: radio picker, connection status, map settings, background service, Colorado Mesh header and icon |
 | 7. Field test and first release | Not started; application ID settled, signed APK still needed |
 
 Later candidates, in rough order: replying to a sender on a channel (see STATUS.md for the open questions), ATAK delivery receipts for direct messages, the radio's battery in ATAK, room server posts, splitting long messages, and sharing the phone's position to the mesh.
