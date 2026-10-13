@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "io.github.robertmtalbot.takbridge"
+    namespace = "org.coloradomesh.takbridge"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "io.github.robertmtalbot.takbridge"
+        applicationId = "org.coloradomesh.takbridge"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
