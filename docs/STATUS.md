@@ -12,6 +12,7 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
 - **Bluetooth link to a MeshCore companion radio**, with an opening handshake that reads the radio's name, settings, firmware and channel capacity.
   - Every step is queued with a time limit.
   - The packet size request may go unanswered without stalling the link.
+  - Connecting waits a moment after a scan and tries up to 3 times, since Android often fails a first try with status 133; tapping the radio already being connected no longer starts over (2026-10-13, not yet seen on a device).
 - **Remembers the chosen radio** and reconnects after a drop, retrying after 3, 5, 10, 20, 30, then every 60 seconds.
   - The Tab Active 3 held the link overnight with no power-saving problems, first on an early build and again on build #31 with every feature in place.
 - **Answers ATAK's connect-time web requests** on `127.0.0.1:8080` (server contacts, groups, feeds, profiles) with empty replies, so ATAK shows no server errors. Only the two version requests stay unanswered, by design.

@@ -28,7 +28,6 @@ class RadioSession(
             onClosed.invoke("Bluetooth is off")
             return
         }
-        BridgeStatus.update { it.copy(radio = "Connecting to radio…") }
         link.connect(adapter.getRemoteDevice(address))
     }
 

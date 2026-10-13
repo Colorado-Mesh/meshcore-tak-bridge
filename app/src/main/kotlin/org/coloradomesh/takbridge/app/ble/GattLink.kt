@@ -28,6 +28,11 @@ import java.util.UUID
  * The packet size request is allowed to go unanswered: the link carries on at the default size
  * rather than waiting forever, which is where some tablets were seen to stall.
  *
+ * Connecting waits a moment first and is tried up to [CONNECT_TRIES] times. Android, Samsung
+ * devices especially, often fails a first connection with status 133, and more so straight
+ * after a scan has stopped; the next try usually works. Giving up after one try made it look as
+ * if a radio had to be tapped several times.
+ *
  * A link is used once. After [Events.onClosed] make a new one to reconnect.
  */
 @SuppressLint("MissingPermission") // The caller checks Bluetooth permission before connecting.
@@ -57,13 +62,22 @@ class GattLink(private val context: Context, private val events: Events) {
     private val outbox = ArrayDeque<ByteArray>()
     private var writing = false
     private var receiverRegistered = false
+    private var attempts = 0
 
     fun connect(device: BluetoothDevice) = handler.post {
         if (step != Step.IDLE) return@post
         step = Step.CONNECTING
-        events.onLog("Connecting to ${device.address}")
         registerBondReceiver()
-        limit(CONNECT_MS) { shutdown("The radio did not answer within ${CONNECT_MS / 1000} s") }
+        // A scan that stopped a moment ago can make the first connection fail; let it settle.
+        handler.postDelayed({ attempt(device) }, SETTLE_MS)
+    }
+
+    private fun attempt(device: BluetoothDevice) {
+        if (step != Step.CONNECTING) return
+        attempts++
+        val which = if (attempts > 1) " (try $attempts of $CONNECT_TRIES)" else ""
+        events.onLog("Connecting to ${device.address}$which")
+        limit(CONNECT_MS) { connectFailed(device, "no answer within ${CONNECT_MS / 1000} s") }
         gatt = device.connectGatt(
             context,
             false,
@@ -73,6 +87,27 @@ class GattLink(private val context: Context, private val events: Events) {
             handler,
         )
         if (gatt == null) shutdown("Android refused to open the connection")
+    }
+
+    /** A connection try failed before the link came up: drop it and try again, up to [CONNECT_TRIES]. */
+    private fun connectFailed(device: BluetoothDevice, why: String) {
+        clearLimit()
+        gatt?.let {
+            it.disconnect()
+            it.close()
+        }
+        gatt = null
+        if (attempts < CONNECT_TRIES) {
+            events.onLog("Connection try $attempts failed ($why); trying again")
+            handler.postDelayed({ attempt(device) }, RETRY_PAUSE_MS)
+        } else {
+            val advice = if (why.startsWith("status 133")) {
+                ". If this keeps happening, forget the radio in Android's Bluetooth settings and pair again"
+            } else {
+                ""
+            }
+            shutdown("Could not connect after $attempts tries ($why)$advice")
+        }
     }
 
     /** Queue one frame for the radio. Dropped, with a log line, when it cannot be sent. */
@@ -103,7 +138,14 @@ class GattLink(private val context: Context, private val events: Events) {
 
     private val callback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
-            if (step == Step.CLOSED) return
+            // A callback from a try already given up on is ignored. Callbacks run on this link's
+            // own thread, so [gatt] is always set before the first one arrives.
+            if (step == Step.CLOSED || g !== gatt) return
+            val connected = newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS
+            if (step == Step.CONNECTING && !connected) {
+                connectFailed(g.device, describeStatus(status))
+                return
+            }
             if (newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
                 events.onLog("Connected; discovering services")
                 step = Step.DISCOVERING
@@ -303,7 +345,7 @@ class GattLink(private val context: Context, private val events: Events) {
         15 -> "status 15, encryption needed"
         19 -> "status 19, the radio closed the connection"
         22 -> "status 22, this device closed the connection"
-        133 -> "status 133, a general Bluetooth error; try again, or forget the radio in Android's Bluetooth settings and pair again"
+        133 -> "status 133, a general Bluetooth error"
         else -> "status $status"
     }
 
@@ -321,7 +363,10 @@ class GattLink(private val context: Context, private val events: Events) {
         private val PAIRING_NEEDED = setOf(5, 8, 15, 137)
 
         private const val SETTLE_MS = 600L
-        private const val CONNECT_MS = 20_000L
+        /** Per try. Android's own limit for a direct connection is about 30 s. */
+        private const val CONNECT_MS = 12_000L
+        private const val CONNECT_TRIES = 3
+        private const val RETRY_PAUSE_MS = 1_500L
         private const val DISCOVER_MS = 15_000L
         private const val MTU_MS = 4_000L
         private const val SUBSCRIBE_MS = 10_000L
