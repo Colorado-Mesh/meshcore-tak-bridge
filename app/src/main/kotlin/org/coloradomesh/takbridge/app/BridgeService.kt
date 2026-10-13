@@ -119,6 +119,12 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
 
     /** The user picked a radio: remember it, and keep it connected until told otherwise. */
     private fun chooseRadio(address: String, name: String) {
+        // Starting again would cut off a connection that is still coming up, and the clash is a
+        // common cause of Android's status 133. A radio waiting to retry is connected at once.
+        if (address == wanted && (radio != null || pendingOpen != null)) {
+            BridgeStatus.log(if (radioUp) "Radio: already connected to $name" else "Radio: already connecting to $name")
+            return
+        }
         prefs().edit().putString(PREF_ADDRESS, address).putString(PREF_NAME, name).apply()
         if (address != wanted) mesh.clear()
         wanted = address
@@ -132,6 +138,7 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         prefs().edit().remove(PREF_ADDRESS).remove(PREF_NAME).apply()
         wanted = null
         main.removeCallbacks(retry)
+        cancelPendingOpen()
         radio?.close()
         radio = null
         radioUp = false
@@ -156,11 +163,38 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         connectRadio(address)
     }
 
-    /** Main thread. Opens a link to [address], replacing any earlier one. */
+    /**
+     * Main thread. Opens a link to [address], replacing any earlier one. An earlier link is given
+     * a moment to close first: Android often fails a connection opened while another is closing.
+     */
     private fun connectRadio(address: String) {
         main.removeCallbacks(retry)
-        radio?.close()
-        BridgeStatus.update { it.copy(radioBusy = true) }
+        cancelPendingOpen()
+        val previous = radio
+        previous?.close()
+        radio = null
+        radioUp = false
+        BridgeStatus.update { it.copy(radioBusy = true, radio = "Connecting to $wantedName…") }
+        val open = Runnable { openRadio(address) }
+        if (previous == null) {
+            open.run()
+        } else {
+            pendingOpen = open
+            main.postDelayed(open, REPLACE_PAUSE_MS)
+        }
+    }
+
+    /** Waiting to open a link while an earlier one closes; main thread only. */
+    private var pendingOpen: Runnable? = null
+
+    private fun cancelPendingOpen() {
+        pendingOpen?.let { main.removeCallbacks(it) }
+        pendingOpen = null
+    }
+
+    private fun openRadio(address: String) {
+        pendingOpen = null
+        if (wanted != address) return
         var session: RadioSession? = null
         session = RadioSession(applicationContext, address, this) { reason ->
             main.post { if (radio === session) onRadioLost(reason) }
@@ -174,12 +208,14 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
      * ATAK's picture survives a short gap, and try again after a pause that grows with each failure.
      */
     private fun onRadioLost(reason: String) {
+        val wasUp = radioUp
         radio = null
         radioUp = false
         if (wanted == null) return
         val wait = RETRY_SECONDS[failures.coerceAtMost(RETRY_SECONDS.size - 1)]
         failures++
-        BridgeStatus.update { it.copy(radio = "Lost $wantedName: $reason\nTrying again in $wait s") }
+        val what = if (wasUp) "Lost $wantedName" else "Could not connect to $wantedName"
+        BridgeStatus.update { it.copy(radio = "$what: $reason\nTrying again in $wait s") }
         main.postDelayed(retry, wait * 1000L)
     }
 
@@ -341,6 +377,7 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
     override fun onDestroy() {
         wanted = null
         main.removeCallbacks(retry)
+        cancelPendingOpen()
         radio?.close()
         radio = null
         BridgeStatus.update { it.copy(radio = "No radio", radioBusy = false) }
@@ -539,6 +576,9 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         const val DEFAULT_MAX_AGE_HOURS = 7 * 24
         private const val PREF_ADDRESS = "radio_address"
         private const val PREF_NAME = "radio_name"
+
+        /** How long a replaced radio link gets to close before the next one opens. */
+        private const val REPLACE_PAUSE_MS = 1_000L
 
         /** Seconds to wait before each reconnection attempt; the last value repeats. */
         private val RETRY_SECONDS = intArrayOf(3, 5, 10, 20, 30, 60)
