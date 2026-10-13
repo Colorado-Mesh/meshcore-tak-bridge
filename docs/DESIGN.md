@@ -251,7 +251,7 @@ Not yet in place: a simulated radio that runs the whole bridge end to end on a c
 | 5. Channel chat | Done, with channels as contacts |
 | 5a. Direct messages and echo check | Done; direct messages tested both ways, no channel echoes seen |
 | 6. App shell | Mostly done: radio picker, connection status, map settings, background service |
-| 7. Field test and first release | Not started; needs a signed APK and a settled application ID |
+| 7. Field test and first release | Not started; application ID settled, signed APK still needed |
 
 Later candidates, in rough order: replying to a sender on a channel (see STATUS.md for the open questions), ATAK delivery receipts for direct messages, the radio's battery in ATAK, room server posts, splitting long messages, and sharing the phone's position to the mesh.
 
@@ -263,6 +263,7 @@ Settled by testing on devices:
 - [x] **How does ATAK address a reply?** To a reachable contact, not to a room; hence channels as contacts.
 - [x] **Will Android keep the bridge running?** Yes on both test devices, including overnight on the Tab Active 3.
 - [x] **Does pairing work across devices?** Yes on both test devices, with the PIN prompt and the packet size request allowed to go unanswered.
+- [x] **What is the application ID?** `org.coloradomesh.takbridge`, from the Colorado Mesh organisation's own domain, decided on 13 October 2026. It replaced `io.github.robertmtalbot.takbridge` before the first signed release, and the Kotlin packages use the same name. It must not change again, because Android treats a new ID as a different app.
 - [x] **Does a sent channel message ever come back, so that it shows twice in ATAK?** No. The firmware source says not (see "Echoes"), and the bridge's echo log never fired in testing on 12 October 2026. The guard stays as a safety net.
 
 Still open:
@@ -270,7 +271,6 @@ Still open:
 - [ ] **Do ATAK's delivery receipts work through this server?** Sending `b-t-f-d` for acknowledged direct messages would show them as delivered in ATAK, but has not been tried.
 - [ ] **Which undocumented protocol details are stable?** The contact record and advert layouts come from firmware source, not the published page, and may change between firmware versions.
 - [ ] **Should the phone's position be shared to the mesh?** It would mean writing the radio's advertised location, which conflicts with the rule of never changing radio settings.
-- [ ] **What is the final application ID?** Currently `io.github.robertmtalbot.takbridge`, from before the move. It has to be settled before the first signed release, because Android treats a new ID as a different app. Now that the project is in Colorado Mesh, the candidates are `org.coloradomesh.takbridge` (the organisation's own domain, which GitHub shows as verified) and `io.github.colorado_mesh.takbridge`.
 - [ ] **Who keeps the release signing key?** Every release must be signed with the same key, or installed copies cannot update. The maintainers need to agree who holds it and where the backup lives.
 
 Decided on 11 October 2026: the name is MeshCore TAK Bridge, and the licence is GPL-3.0-or-later.

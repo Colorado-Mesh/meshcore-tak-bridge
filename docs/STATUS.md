@@ -48,7 +48,7 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
 
 ## Still to do
 
-1. A signed release APK and a settled application ID (currently `io.github.robertmtalbot.takbridge`, from before the move; see DESIGN.md's open questions). The release also needs the maintainers to agree who keeps the signing key.
+1. A signed release APK. The maintainers need to agree who keeps the signing key (see DESIGN.md's open questions). The application ID is settled: `org.coloradomesh.takbridge` (2026-10-13). Builds from before that used `io.github.robertmtalbot.takbridge` and install as a separate app, so uninstall them once.
 2. Possibly: ATAK delivery receipts (`b-t-f-d`) for acknowledged direct messages, so ATAK shows them as delivered; and room server posts, which arrive as signed messages and are skipped for now.
 3. **Reply to a sender on a channel**, if it can be done well. Requested 2026-10-12. To work out:
    - The reply form is `@[Name]` at the start of the text, as the MeshCore apps write it (confirmed by use, 2026-10-12). The firmware gives it no special handling: channel text is sent exactly as written, so this is a convention between apps, and the bridge only has to write the text that way.
