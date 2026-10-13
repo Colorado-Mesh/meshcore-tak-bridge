@@ -2,7 +2,7 @@
 
 An Android app that connects a phone to a [MeshCore](https://docs.meshcore.io/) companion radio over Bluetooth and presents the mesh to [ATAK](https://tak.gov/) as a local TAK server. Mesh nodes appear as map markers, and each mesh channel appears as an ATAK contact you can chat with.
 
-It is the phone-side counterpart to the TAK server in the [Colorado Mesh desktop client](https://github.com/Colorado-Mesh/mesh-client). How it works and why is in [docs/DESIGN.md](docs/DESIGN.md); what is done and what is next is in [docs/STATUS.md](docs/STATUS.md).
+It is a [Colorado Mesh](https://coloradomesh.org/) project, and the phone-side counterpart to the TAK server in the [Colorado Mesh desktop client](https://github.com/Colorado-Mesh/mesh-client). How it works and why is in [docs/DESIGN.md](docs/DESIGN.md); what is done and what is next is in [docs/STATUS.md](docs/STATUS.md).
 
 ## Status
 
@@ -21,7 +21,7 @@ Not yet: a signed release APK, the radio's battery in ATAK.
 
 ## Try it
 
-1. Download the debug APK from the latest run of the **CI** workflow under the repository's Actions tab (artifact `meshcore-tak-bridge-debug-apk`), or build it yourself (below). Each CI build is signed with a different temporary debug key, so uninstall the previous build before installing a new one.
+1. Download the debug APK from the latest run of the **CI** workflow under the [repository's Actions tab](https://github.com/Colorado-Mesh/meshcore-tak-bridge/actions/workflows/ci.yml) (artifact `meshcore-tak-bridge-debug-apk`), or build it yourself (below). Each CI build is signed with a different temporary debug key, so uninstall the previous build before installing a new one.
 2. Install it on a phone that has ATAK, open it, and tap **Start bridge**. Allow Bluetooth and notification permissions when asked.
 3. Tap **Scan for radios**, then tap your radio. Enter its PIN if Android asks to pair. The app remembers the radio and reconnects to it on its own.
 4. In ATAK, open Settings, Network Preferences, TAK Servers, and add a server with address `127.0.0.1`, port `8087`, protocol TCP. Leave SSL/TLS off.

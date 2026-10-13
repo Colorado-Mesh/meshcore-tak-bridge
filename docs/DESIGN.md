@@ -1,6 +1,6 @@
 # MeshCore TAK Bridge: Design
 
-First written as a proposal on 11 October 2026. Revised 12 October 2026 to describe the app as built and tested on devices. Current progress and the to-do list are in [STATUS.md](STATUS.md).
+First written as a proposal on 11 October 2026. Revised 12 October 2026 to describe the app as built and tested on devices, and 13 October 2026 for the move to Colorado Mesh. Current progress and the to-do list are in [STATUS.md](STATUS.md).
 
 ## Summary
 
@@ -8,7 +8,7 @@ MeshCore TAK Bridge is an Android app that connects a phone to a MeshCore compan
 
 It is the phone-side counterpart to the TAK server built into the Colorado Mesh desktop client, and the two share their behaviour towards ATAK. What this app learned on devices about chat addressing has been carried back to the desktop client (Colorado-Mesh/mesh-client pull request 1253).
 
-The project lives under Bud's GitHub account, written from scratch, with no code taken from TAK-MESHCORE. It is licensed GPL-3.0-or-later, the same as the Colorado Mesh desktop client. If the Colorado Mesh maintainers agree, the repository can move into that organisation.
+The project was started under Bud's GitHub account and moved into the Colorado Mesh organisation on 13 October 2026, as [Colorado-Mesh/meshcore-tak-bridge](https://github.com/Colorado-Mesh/meshcore-tak-bridge). It is written from scratch, with no code taken from TAK-MESHCORE, and licensed GPL-3.0-or-later, the same as the Colorado Mesh desktop client.
 
 ## Background
 
@@ -270,6 +270,7 @@ Still open:
 - [ ] **Do ATAK's delivery receipts work through this server?** Sending `b-t-f-d` for acknowledged direct messages would show them as delivered in ATAK, but has not been tried.
 - [ ] **Which undocumented protocol details are stable?** The contact record and advert layouts come from firmware source, not the published page, and may change between firmware versions.
 - [ ] **Should the phone's position be shared to the mesh?** It would mean writing the radio's advertised location, which conflicts with the rule of never changing radio settings.
-- [ ] **What is the final application ID?** Currently `io.github.robertmtalbot.takbridge`; it should be settled before the first signed release, and may depend on a move to Colorado Mesh.
+- [ ] **What is the final application ID?** Currently `io.github.robertmtalbot.takbridge`, from before the move. It has to be settled before the first signed release, because Android treats a new ID as a different app. Now that the project is in Colorado Mesh, the candidates are `org.coloradomesh.takbridge` (the organisation's own domain, which GitHub shows as verified) and `io.github.colorado_mesh.takbridge`.
+- [ ] **Who keeps the release signing key?** Every release must be signed with the same key, or installed copies cannot update. The maintainers need to agree who holds it and where the backup lives.
 
 Decided on 11 October 2026: the name is MeshCore TAK Bridge, and the licence is GPL-3.0-or-later.

@@ -2,6 +2,8 @@
 
 Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2026-10-13.
 
+**Repository:** moved from RobertMTalbot/meshcore-tak-bridge to [Colorado-Mesh/meshcore-tak-bridge](https://github.com/Colorado-Mesh/meshcore-tak-bridge) on 2026-10-13. GitHub redirects the old address, but clones should point their remote at the new one.
+
 **Release candidate:** CI build #31 (commit `7578c16`) ran overnight on the Tab Active 3, 12–13 October, with no errors or issues noticed. Later commits up to `3ff6385` change only the docs.
 
 ## What works (tested on a Pixel 9 Pro and a Galaxy Tab Active 3)
@@ -46,14 +48,14 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
 
 ## Still to do
 
-1. A signed release APK and a settled application ID (currently `io.github.robertmtalbot.takbridge`).
+1. A signed release APK and a settled application ID (currently `io.github.robertmtalbot.takbridge`, from before the move; see DESIGN.md's open questions). The release also needs the maintainers to agree who keeps the signing key.
 2. Possibly: ATAK delivery receipts (`b-t-f-d`) for acknowledged direct messages, so ATAK shows them as delivered; and room server posts, which arrive as signed messages and are skipped for now.
 3. **Reply to a sender on a channel**, if it can be done well. Requested 2026-10-12. To work out:
    - The reply form is `@[Name]` at the start of the text, as the MeshCore apps write it (confirmed by use, 2026-10-12). The firmware gives it no special handling: channel text is sent exactly as written, so this is a convention between apps, and the bridge only has to write the text that way.
    - ATAK's chat has no reply action, and adding one would need a plugin. The likely route is a typed convention: a message from ATAK that starts with `@Name` (or `@"Two Words"`) goes out as `@[Name] …`, so MeshCore users see a normal reply.
    - Matching the name: offer only names heard on that channel recently, ignore case, and send the text unchanged when the name does not match, so nothing is altered by surprise.
    - Received replies: show `@[Name]` as it is, or tidy it to `@Name`. Possibly mark one addressed to this radio's name.
-4. Later: radio battery in ATAK, and moving the repository to Colorado Mesh if they agree.
+4. Later: radio battery in ATAK.
 
 In Claude cloud sessions, `./gradlew` cannot fetch Gradle or dependencies. The plain modules' tests can still be run with the Kotlin compiler and JUnit bundled in a local Gradle install. The app is only compiled in CI.
 
