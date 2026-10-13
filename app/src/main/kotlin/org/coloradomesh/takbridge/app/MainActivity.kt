@@ -48,6 +48,13 @@ class MainActivity : Activity() {
     private lateinit var scanner: RadioScanner
     private val found = LinkedHashMap<String, FoundRadio>()
 
+    /**
+     * The button for each radio in [found], by address, and the line above them while scanning.
+     * Kept and updated rather than rebuilt; see [showFound]. Main thread only.
+     */
+    private val radioRows = HashMap<String, Button>()
+    private var scanNote: TextView? = null
+
     /** True while a scan runs. Main thread only. */
     private var scanning = false
     private val onState: (BridgeState) -> Unit = { state -> runOnUiThread { render(state) } }
@@ -127,7 +134,7 @@ class MainActivity : Activity() {
             scanner.stop()
             scanning = false
             found.clear()
-            radioList.removeAllViews()
+            clearRadioList()
         }
         showRadioButton(state)
     }
@@ -184,11 +191,12 @@ class MainActivity : Activity() {
     private fun scan() {
         scanner.blocker()?.let {
             BridgeStatus.log("Cannot scan: $it")
-            radioList.removeAllViews()
+            clearRadioList()
             showRadioNote("Cannot scan: $it")
             return
         }
         found.clear()
+        clearRadioList()
         scanning = true
         showRadioButton()
         showFound()
@@ -227,19 +235,44 @@ class MainActivity : Activity() {
         radioList.addView(TextView(this).apply { this.text = text }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
     }
 
-    private fun showFound() {
+    private fun clearRadioList() {
         radioList.removeAllViews()
-        if (scanning) showRadioNote(if (found.isEmpty()) "Looking for radios…" else "Still looking; tap a radio to connect")
+        radioRows.clear()
+        scanNote = null
+    }
+
+    /**
+     * Shows the radios found so far. While scanning, results arrive several times a second, one
+     * per advert. Rebuilding the buttons for each one replaced the button under the user's
+     * finger between press and release, so a tap often did nothing until the scan ended. So each
+     * radio keeps its button, and only the text changes; new radios are added at the end.
+     */
+    private fun showFound() {
+        val noteText = when {
+            !scanning -> null
+            found.isEmpty() -> "Looking for radios…"
+            else -> "Still looking; tap a radio to connect"
+        }
+        if (noteText == null) {
+            scanNote?.let { radioList.removeView(it) }
+            scanNote = null
+        } else {
+            val note = scanNote ?: TextView(this).also {
+                radioList.addView(it, 0, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+                scanNote = it
+            }
+            if (note.text.toString() != noteText) note.text = noteText
+        }
         for (radio in found.values) {
             val signal = if (radio.rssi != 0) "  ${radio.rssi} dBm" else ""
-            radioList.addView(
-                Button(this).apply {
-                    text = "${radio.name}$signal"
-                    isAllCaps = false
-                    setOnClickListener { connect(radio) }
-                },
-                LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT),
-            )
+            val label = "${radio.name}$signal"
+            val row = radioRows.getOrPut(radio.address) {
+                Button(this).apply { isAllCaps = false }.also {
+                    radioList.addView(it, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+                }
+            }
+            if (row.text.toString() != label) row.text = label
+            row.setOnClickListener { connect(radio) }
         }
     }
 
@@ -247,7 +280,7 @@ class MainActivity : Activity() {
         scanner.stop()
         scanning = false
         found.clear()
-        radioList.removeAllViews()
+        clearRadioList()
         startForegroundService(
             serviceIntent().setAction(BridgeService.ACTION_CONNECT_RADIO)
                 .putExtra(BridgeService.EXTRA_ADDRESS, radio.address)
