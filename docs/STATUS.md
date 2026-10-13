@@ -1,6 +1,8 @@
 # Project status
 
-Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2026-10-12.
+Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2026-10-13.
+
+**Release candidate:** CI build #31 (commit `7578c16`) ran overnight on the Tab Active 3, 12–13 October, with no errors or issues noticed. Later commits up to `3ff6385` change only the docs.
 
 ## What works (tested on a Pixel 9 Pro and a Galaxy Tab Active 3)
 
@@ -9,7 +11,8 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
   - Every step is queued with a time limit.
   - The packet size request may go unanswered without stalling the link.
 - **Remembers the chosen radio** and reconnects after a drop, retrying after 3, 5, 10, 20, 30, then every 60 seconds.
-  - The Tab Active 3 held the link overnight with no power-saving problems.
+  - The Tab Active 3 held the link overnight with no power-saving problems, first on an early build and again on build #31 with every feature in place.
+- **Answers ATAK's connect-time web requests** on `127.0.0.1:8080` (server contacts, groups, feeds, profiles) with empty replies, so ATAK shows no server errors. Only the two version requests stay unanswered, by design.
 - **Nodes on the map:** contacts that share a position become markers.
   - Companions are team members in a chosen team colour (default Cyan).
   - Repeaters and room servers are installations, each with an optional icon-set icon (GeoOps presets).
