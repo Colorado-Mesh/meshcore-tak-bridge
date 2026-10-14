@@ -6,12 +6,12 @@ It is a [Colorado Mesh](https://coloradomesh.org/) project, and the phone-side c
 
 ## Status
 
-**Working, pre-release.** Tested on a Pixel 9 Pro and a Samsung Galaxy Tab Active 3. There is no signed release yet, only debug builds.
+**Working, pre-release.** Tested on a Pixel 9 Pro and a Samsung Galaxy Tab Active 3. CI build #43 is the release candidate for version 0.1.0; there is no signed release yet, only debug builds.
 
 What works:
 
 - A local TAK server for ATAK on `127.0.0.1:8087`, plain TCP, loopback only, one client.
-- A Bluetooth link to a MeshCore companion radio, with every step queued and time-limited, PIN pairing, and automatic reconnection to the radio chosen last time.
+- A Bluetooth link to a MeshCore companion radio, with every step queued and time-limited, up to 3 connection tries, PIN pairing, and automatic reconnection to the radio chosen last time.
 - Every node that shares a position as an ATAK marker: companions as team members in a team colour you choose, repeaters and room servers as installations (optionally with an icon from an ATAK icon set), sensors as sensors. Filters by node type and by how recently a node was heard.
 - Every channel on the radio as an ATAK contact, two-way: channel text arrives as messages from that contact, and a message you send to it goes out on that channel.
 - Direct messages with companion nodes, both ways, through each node's ATAK contact, with acknowledgement and up to 3 tries.
@@ -43,7 +43,11 @@ Requires JDK 17 (Gradle fetches it if missing) and, for the app, the Android SDK
 ./gradlew assembleDebug   # app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Every push to `main` runs the tests and builds the debug APK in GitHub Actions.
+Every pull request and every push to `main` runs the tests and builds the debug APK in GitHub Actions.
+
+## Contributing
+
+Changes go into `main` through pull requests, and CI must pass before merging. Keep to the design rules below, and update [docs/STATUS.md](docs/STATUS.md) when something is finished, found on a device, or added to the to-do list. Bug reports and ideas are welcome as [issues](https://github.com/Colorado-Mesh/meshcore-tak-bridge/issues).
 
 ## Layout
 
@@ -52,7 +56,7 @@ Every push to `main` runs the tests and builds the debug APK in GitHub Actions.
 | `protocol` | MeshCore companion protocol: frame encoding and decoding, and the client that runs the conversation with the radio one command at a time. Plain Kotlin. |
 | `cot` | The Cursor on Target events ATAK exchanges: markers, contacts, GeoChat, deletes, ping and pong, and the stream framer. Plain Kotlin. |
 | `takserver` | The loopback TCP server: one client, keepalive replies, inbound chat, rate limit. Also a minimal web API answer on port 8080, so ATAK's poll for server contacts does not fail. Plain Kotlin. |
-| `app` | The Android app: the Bluetooth link (`ble/`), the mesh-to-ATAK mapping (`MeshPicture`), the foreground service that ties them together, and the status and settings screen. |
+| `app` | The Android app: the Bluetooth link and scanner (`ble/`), the mesh-to-ATAK mapping (`MeshPicture`), the foreground service that ties them together, the status and settings screen, and the icons (`res/`). |
 
 The plain-Kotlin modules have JUnit tests. The app is built in code with no layout resources; its only resources are the icons.
 
