@@ -1,0 +1,130 @@
+name: Release
+
+# Builds, signs and drafts a GitHub Release when a version tag such as v0.1.0 is pushed.
+# The signing key lives only in the `release` environment's secrets, which a maintainer must
+# approve each run to use. How to set that up and make a release: docs/RELEASING.md.
+#
+# Every action is pinned to a full commit, not a tag, because a tag can be moved to other code and
+# this job can read the signing key. Dependabot (.github/dependabot.yml) proposes updates.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, sign and draft the release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: write # to create the release
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: 17
+
+      # No build cache for a signed build: everything is built fresh from the tagged source.
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-disabled: true
+
+      - name: Check the tag matches the app's version
+        shell: bash
+        run: |
+          version=$(sed -n 's/^ *versionName = "\(.*\)"$/\1/p' app/build.gradle.kts)
+          code=$(sed -n 's/^ *versionCode = \([0-9]*\)$/\1/p' app/build.gradle.kts)
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match versionName \"${version}\" in app/build.gradle.kts"
+            exit 1
+          fi
+          echo "VERSION=${version}" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=${code}" >> "$GITHUB_ENV"
+
+      - name: Unpack the signing key
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+        run: |
+          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS; do
+            if [ -z "${!name}" ]; then
+              echo "::error::The release environment has no RELEASE_${name} secret; see docs/RELEASING.md"
+              exit 1
+            fi
+          done
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+          echo "RELEASE_KEYSTORE_FILE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+
+      - name: Test and build the signed app
+        shell: bash
+        env:
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+        run: ./gradlew test assembleRelease
+
+      - name: Remove the signing key
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/release.keystore"
+
+      - name: Check the signature and name the files
+        shell: bash
+        run: |
+          apk=app/build/outputs/apk/release/app-release.apk
+          if [ ! -f "$apk" ]; then
+            echo "::error::No signed APK was built (an unsigned build is named app-release-unsigned.apk)"
+            ls app/build/outputs/apk/release/ || true
+            exit 1
+          fi
+          sdk="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          apksigner=$(ls "$sdk"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -n 1)
+          if [ -z "$apksigner" ]; then
+            echo "::error::apksigner was not found in the Android SDK at $sdk"
+            exit 1
+          fi
+          "$apksigner" verify --verbose --print-certs "$apk" | tee signature.txt
+          grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" signature.txt
+          fingerprint=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' signature.txt)
+          out="meshcore-tak-bridge-${VERSION}.apk"
+          cp "$apk" "$out"
+          sha256sum "$out" > "$out.sha256"
+          echo "APK=$out" >> "$GITHUB_ENV"
+          {
+            echo "MeshCore TAK Bridge ${VERSION} (version code ${VERSION_CODE})."
+            echo
+            echo "**Install:** download \`$out\` and open it on the phone. If a debug build from the CI workflow is installed, uninstall it first: debug builds are signed with a different key, so Android will not update one with this."
+            echo
+            echo "**Check the download:** its SHA-256 is in \`$out.sha256\`. The signing certificate's SHA-256 fingerprint is"
+            echo
+            echo "\`${fingerprint}\`"
+            echo
+            echo "and every release is signed with the same certificate. To check: \`apksigner verify --print-certs $out\`."
+          } > notes.md
+          {
+            echo "### Signed ${out}"
+            echo "Certificate SHA-256: \`${fingerprint}\`"
+            echo "APK SHA-256: \`$(cut -d' ' -f1 "$out.sha256")\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # A draft, so a maintainer can install and check it before publishing it.
+      - name: Draft the GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "$APK" "$APK.sha256" \
+            --draft --verify-tag \
+            --title "MeshCore TAK Bridge ${VERSION}" \
+            --notes "$(cat notes.md)" --generate-notes

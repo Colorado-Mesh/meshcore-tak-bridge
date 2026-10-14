@@ -1,0 +1,12 @@
+# Proposes updates to the GitHub Actions the workflows use. They are pinned to full commits (see
+# .github/workflows/release.yml), so this is how they stay current: each update arrives as a pull
+# request that changes the commit and its version comment, and CI runs on it.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]

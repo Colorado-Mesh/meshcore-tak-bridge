@@ -15,6 +15,8 @@ captures/
 # Signing material never belongs in the repository
 *.jks
 *.keystore
+*.p12
+keystore.b64
 
 # OS
 .DS_Store

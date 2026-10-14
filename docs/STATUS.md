@@ -55,16 +55,17 @@ Changes since the last overnight burn-in (build #31, 12–13 October): the appli
 - Changes go into `main` through pull requests. Each pull request runs CI (tests and a debug build) and CodeQL; merge once they pass.
 - Every push to `main` builds again. The debug APK is the `meshcore-tak-bridge-debug-apk` artifact on each run, and the build number in this file is the CI run number.
 - A newer push to `main` cancels a CI run still going on an older one, so merging two pull requests in quick succession leaves one cancelled run and one complete build with both.
-- Each CI build is signed with a new temporary debug key, so a debug build will not install over a different one: uninstall first. A signed release will fix this.
+- Each CI build is signed with a new temporary debug key, so a debug build will not install over a different one: uninstall first. Signed releases share one key, so each installs over the last.
+- CI and the release workflow use action versions that run on Node 24 (`upload-artifact` v7, `setup-gradle` v6 with its open-source cache). Every action is pinned to a full commit rather than a tag, as CodeQL asks, since the release job can read the signing key; Dependabot proposes updates monthly as pull requests.
 - The `cot`, `takserver` and `protocol` modules are plain Kotlin with JUnit tests. `app` is the Android app, built in code; its only resources are the icons.
 
 ## Still to do
 
 1. **A signed release APK**, version 0.1.0 from build #43's code.
-   - The maintainers need to agree who creates the release signing key and who holds the encrypted backup (see DESIGN.md's open questions). Every later release must be signed with the same key.
-   - Then: an org admin adds the keystore and its passwords as GitHub secrets, ideally in a `release` environment that needs a maintainer's approval, and a release workflow builds, signs and publishes a GitHub Release when a `v*` tag is pushed.
+   - Decided 2026-10-14: Bud creates and holds the release signing key.
+   - The release workflow (`.github/workflows/release.yml`) is in place: pushing a `v*` tag tests, builds and signs the app with the key from the `release` environment, after a maintainer approves the run, and drafts a GitHub Release. [RELEASING.md](RELEASING.md) has the whole procedure.
+   - Still to do, by Bud: create the key and back it up, create the `release` environment and its three secrets, then tag `v0.1.0`.
    - The application ID is settled: `org.coloradomesh.takbridge` (2026-10-13). Builds from before that used `io.github.robertmtalbot.takbridge` and install as a separate app, so uninstall them once.
-   - While writing the release workflow: GitHub is moving actions off Node 20 (`actions/upload-artifact@v4` and `gradle/actions/setup-gradle@v4` warn about it), and `ubuntu-latest` moves to Ubuntu 26 from 19 October 2026.
 2. Possibly: ATAK delivery receipts (`b-t-f-d`) for acknowledged direct messages, so ATAK shows them as delivered; and room server posts, which arrive as signed messages and are skipped for now.
 3. **Reply to a sender on a channel**, if it can be done well. Requested 2026-10-12. To work out:
    - The reply form is `@[Name]` at the start of the text, as the MeshCore apps write it (confirmed by use, 2026-10-12). The firmware gives it no special handling: channel text is sent exactly as written, so this is a convention between apps, and the bridge only has to write the text that way.

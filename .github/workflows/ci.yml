@@ -18,20 +18,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
           java-version: 17
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          # The open-source cache, a thin wrapper over actions/cache.
+          cache-provider: basic
 
-      - name: Run tests and build the debug app
+      # The release variant is built too, unsigned, so problems that only a release build shows
+      # (such as Android's release lint checks) turn up here rather than when a tag is pushed.
+      - name: Run tests and build the app
         shell: bash
         run: |
           set -o pipefail
-          ./gradlew test assembleDebug --continue 2>&1 | tee build.log
+          ./gradlew test assembleDebug assembleRelease --continue 2>&1 | tee build.log
 
       # Puts the failing lines on the run's summary page, where they can be read without
       # opening the full log.
@@ -52,13 +57,13 @@ jobs:
 
       - name: Upload test reports
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: test-reports
           path: "**/build/reports/tests/"
 
       - name: Upload debug APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: meshcore-tak-bridge-debug-apk
           path: app/build/outputs/apk/debug/*.apk
