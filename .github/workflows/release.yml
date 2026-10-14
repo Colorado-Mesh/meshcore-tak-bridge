@@ -96,7 +96,15 @@ jobs:
           fi
           "$apksigner" verify --verbose --print-certs "$apk" | tee signature.txt
           grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" signature.txt
-          fingerprint=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' signature.txt)
+          # apksigner's wording for this line varies between versions ("Signer #1 certificate
+          # SHA-256 digest", or with the signer's SDK range), so match its end and the 64 hex digits.
+          fingerprint=$(grep -m 1 -oiE 'certificate SHA-256 digest: [0-9a-f]{64}' signature.txt | awk '{print tolower($NF)}')
+          if [ -z "$fingerprint" ]; then
+            echo "::error::Could not read the signing certificate's SHA-256 fingerprint from apksigner's output"
+            exit 1
+          fi
+          # The same fingerprint as keytool -list -v prints it, to compare with the key holder's note.
+          keytool_form=$(printf '%s' "$fingerprint" | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')
           out="meshcore-tak-bridge-${VERSION}.apk"
           cp "$apk" "$out"
           sha256sum "$out" > "$out.sha256"
@@ -110,11 +118,16 @@ jobs:
             echo
             echo "\`${fingerprint}\`"
             echo
+            echo "(as \`keytool\` shows it: \`${keytool_form}\`)"
+            echo
             echo "and every release is signed with the same certificate. To check: \`apksigner verify --print-certs $out\`."
           } > notes.md
           {
             echo "### Signed ${out}"
             echo "Certificate SHA-256: \`${fingerprint}\`"
+            echo
+            echo "As keytool shows it: \`${keytool_form}\`"
+            echo
             echo "APK SHA-256: \`$(cut -d' ' -f1 "$out.sha256")\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
