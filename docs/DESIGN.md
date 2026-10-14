@@ -234,7 +234,7 @@ Other choices:
 - **Icon:** an adaptive icon, with a themed version and a matching status bar icon: the Colorado Mesh mark, its arc closed into a map crosshair, in the Colorado Mesh colours. It uses no ATAK or TAK artwork, since the project is not affiliated with the TAK Product Center. `docs/icon/make_icon.py` writes the vector drawables and a preview from one description.
 - **Application ID:** `org.coloradomesh.takbridge`, from the organisation's domain; the Kotlin packages share it.
 - **Licence:** GPL-3.0-or-later, matching the Colorado Mesh desktop client.
-- **Builds:** changes arrive by pull request. Each pull request and each push to `main` runs the tests and builds a debug APK in GitHub Actions; CodeQL also checks each pull request. Signed release builds are still to come (see the open questions).
+- **Builds:** changes arrive by pull request. Each pull request and each push to `main` runs the tests and builds a debug APK in GitHub Actions; CodeQL also checks each pull request. A version tag (`v0.1.0`) runs the release workflow, which signs the APK with the release key and drafts a GitHub Release ([RELEASING.md](RELEASING.md)).
 
 ## Testing
 
@@ -255,7 +255,7 @@ Not yet in place: a simulated radio that runs the whole bridge end to end on a c
 | 5. Channel chat | Done, with channels as contacts |
 | 5a. Direct messages and echo check | Done; direct messages tested both ways, no channel echoes seen |
 | 6. App shell | Done: radio picker, connection status, map settings, background service, Colorado Mesh header, icon and About |
-| 7. Field test and first release | In progress: build #43 is the release candidate; a signed APK needs the release signing key |
+| 7. Field test and first release | In progress: build #43 is the release candidate and the release workflow is ready; waiting on the signing key and the `v0.1.0` tag |
 
 Later candidates, in rough order: replying to a sender on a channel (see STATUS.md for the open questions), ATAK delivery receipts for direct messages, the radio's battery in ATAK, room server posts, splitting long messages, and sharing the phone's position to the mesh.
 
@@ -276,6 +276,6 @@ Still open:
 - [ ] **Do ATAK's delivery receipts work through this server?** Sending `b-t-f-d` for acknowledged direct messages would show them as delivered in ATAK, but has not been tried.
 - [ ] **Which undocumented protocol details are stable?** The contact record and advert layouts come from firmware source, not the published page, and may change between firmware versions.
 - [ ] **Should the phone's position be shared to the mesh?** It would mean writing the radio's advertised location, which conflicts with the rule of never changing radio settings.
-- [ ] **Who keeps the release signing key?** Every release must be signed with the same key, or installed copies cannot update; a lost key means no more updates, and a leaked one lets someone else sign an "update". The maintainers need to agree who creates it and who holds the encrypted backup. The suggestion is one maintainer creates it, it goes into GitHub as secrets in a `release` environment that needs a maintainer's approval, and two maintainers keep the encrypted backup outside GitHub.
+- [x] **Who keeps the release signing key?** Bud creates and holds it (decided 14 October 2026), with a password-manager copy and an offline copy. GitHub keeps it as secrets in a `release` environment that a maintainer must approve each run to use. Every release must be signed with this key, or installed copies cannot update. See [RELEASING.md](RELEASING.md).
 
 Decided on 11 October 2026: the name is MeshCore TAK Bridge, and the licence is GPL-3.0-or-later.
