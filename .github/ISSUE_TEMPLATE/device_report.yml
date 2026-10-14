@@ -1,0 +1,65 @@
+name: Device report
+description: Tell us how the bridge does on your phone or tablet, whether it works or not.
+labels: ["device report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Reports from real devices are how the bridge gets tested on more than the two it was built on (a Pixel 9 Pro and a Galaxy Tab Active 3). A report that everything works is just as useful.
+  - type: input
+    id: phone
+    attributes:
+      label: Phone or tablet, and Android version
+      placeholder: "Samsung Galaxy XCover 6 Pro, Android 14"
+    validations:
+      required: true
+  - type: input
+    id: atak
+    attributes:
+      label: ATAK version
+      description: In ATAK, Settings, About.
+      placeholder: "ATAK-CIV 5.4.0.x"
+    validations:
+      required: true
+  - type: input
+    id: radio
+    attributes:
+      label: Radio and firmware
+      description: 'The app''s log shows a line like "Radio: firmware v1.x, Heltec V3, 40 channel slots" after connecting.'
+      placeholder: "RAK WisBlock 4631, MeshCore companion v1.9.0"
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: App version
+      description: Shown in the app's header.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: checkboxes
+    id: worked
+    attributes:
+      label: What worked
+      description: Tick what you tried and saw working. Leave the rest blank, and say below what went wrong.
+      options:
+        - label: ATAK connected to the bridge (127.0.0.1, port 8087, TCP)
+        - label: The scan found the radio, and it connected on the first tap
+        - label: Pairing with the radio's PIN
+        - label: Reconnecting by itself after the radio was turned off and on
+        - label: Nodes with a position appeared on the ATAK map
+        - label: Channel messages, both ways
+        - label: Direct messages with a companion node, both ways
+        - label: Kept running for an hour or more with the screen off
+        - label: Kept running overnight
+  - type: textarea
+    id: notes
+    attributes:
+      label: What did not work, or anything else
+      description: Problems, odd behaviour, or settings you had to change (battery optimisation, for example).
+  - type: textarea
+    id: log
+    attributes:
+      label: The app's log (optional)
+      description: In the app, long-press the log, choose Select all, then Copy, and paste it here. Remove anything private first.
+      render: text
