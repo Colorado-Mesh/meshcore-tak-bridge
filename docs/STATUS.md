@@ -56,7 +56,7 @@ Changes since the last overnight burn-in (build #31, 12–13 October): the appli
 - Every push to `main` builds again. The debug APK is the `meshcore-tak-bridge-debug-apk` artifact on each run, and the build number in this file is the CI run number.
 - A newer push to `main` cancels a CI run still going on an older one, so merging two pull requests in quick succession leaves one cancelled run and one complete build with both.
 - Each CI build is signed with a new temporary debug key, so a debug build will not install over a different one: uninstall first. Signed releases share one key, so each installs over the last.
-- CI and the release workflow use action versions that run on Node 24 (`upload-artifact@v7`, `setup-gradle@v6` with its open-source cache).
+- CI and the release workflow use action versions that run on Node 24 (`upload-artifact` v7, `setup-gradle` v6 with its open-source cache). Every action is pinned to a full commit rather than a tag, as CodeQL asks, since the release job can read the signing key; Dependabot proposes updates monthly as pull requests.
 - The `cot`, `takserver` and `protocol` modules are plain Kotlin with JUnit tests. `app` is the Android app, built in code; its only resources are the icons.
 
 ## Still to do
