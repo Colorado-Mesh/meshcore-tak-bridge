@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Setup help
+    url: https://github.com/Colorado-Mesh/meshcore-tak-bridge#try-it
+    about: How to install the app and point ATAK at it, and what to try when direct messages fail.
+  - name: Colorado Mesh
+    url: https://coloradomesh.org/
+    about: Questions about the mesh itself, radios, channels and meetups.

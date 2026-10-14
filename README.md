@@ -61,7 +61,7 @@ Every pull request and every push to `main` runs the tests and builds the debug 
 
 ## Contributing
 
-Changes go into `main` through pull requests, and CI must pass before merging. Keep to the design rules below, and update [docs/STATUS.md](docs/STATUS.md) when something is finished, found on a device, or added to the to-do list. Bug reports and ideas are welcome as [issues](https://github.com/Colorado-Mesh/meshcore-tak-bridge/issues).
+Changes go into `main` through pull requests, and CI must pass before merging. Keep to the design rules below, and update [docs/STATUS.md](docs/STATUS.md) when something is finished, found on a device, or added to the to-do list. Bug reports, ideas, and reports of how the bridge does on your phone or tablet are welcome as [issues](https://github.com/Colorado-Mesh/meshcore-tak-bridge/issues/new/choose); each kind has a short form that asks for the details needed.
 
 ## Layout
 

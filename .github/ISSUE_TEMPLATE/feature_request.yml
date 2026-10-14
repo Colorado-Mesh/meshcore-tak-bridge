@@ -1,0 +1,26 @@
+name: Idea or feature request
+description: Something the bridge could do, or do better.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A few rules shape what the bridge does, from problems seen in practice. It never changes the radio's settings, channels, contacts or clock; it sends only plain MeshCore text that any MeshCore app can read; and it never sends chat to repeaters or room servers. An idea that needs one of those to change may still be worth raising, but say so. The full list is under "Design rules" in the [README](https://github.com/Colorado-Mesh/meshcore-tak-bridge#design-rules), and planned work is in [docs/STATUS.md](https://github.com/Colorado-Mesh/meshcore-tak-bridge/blob/main/docs/STATUS.md).
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The situation, and what gets in the way today.
+      placeholder: "On a search, our team leader wants to see each searcher's radio battery in ATAK."
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+      description: How you picture it working, in ATAK and in the app.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Anything you use now instead
+      description: Other apps, plugins or workarounds.

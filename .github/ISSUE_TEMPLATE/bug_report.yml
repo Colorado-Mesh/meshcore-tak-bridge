@@ -1,0 +1,99 @@
+name: Bug report
+description: Something in MeshCore TAK Bridge does not work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this. Please check you have the [latest release](https://github.com/Colorado-Mesh/meshcore-tak-bridge/releases/latest) first.
+
+        The app's log helps most, but it records message text, node and radio names, and your ATAK callsign. Remove anything you would not want public before posting it.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you saw, and what you expected instead.
+      placeholder: "Messages I send to #denver in ATAK never reach the mesh, but messages from the mesh arrive."
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen
+      description: The steps, as far as you know them. "It happened once after an hour" is useful too.
+      placeholder: |
+        1. Start the bridge and connect to the radio
+        2. In ATAK, open the #denver contact and send "test"
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part?
+      multiple: true
+      options:
+        - Finding or connecting to the radio (Bluetooth)
+        - Staying connected or reconnecting
+        - ATAK connecting to the bridge
+        - Nodes on the map
+        - Channel messages
+        - Direct messages
+        - The app's screen or settings
+        - Running in the background (stopped by Android)
+        - Something else
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: App version
+      description: Shown in the app's header, next to "A Colorado Mesh project". For a test build, give the CI run number.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Where the app came from
+      options:
+        - A release from GitHub
+        - A debug (test) build from CI
+        - Built it myself
+    validations:
+      required: true
+  - type: input
+    id: phone
+    attributes:
+      label: Phone or tablet, and Android version
+      placeholder: "Samsung Galaxy Tab Active 3, Android 13"
+    validations:
+      required: true
+  - type: input
+    id: atak
+    attributes:
+      label: ATAK version
+      description: In ATAK, Settings, About.
+      placeholder: "ATAK-CIV 5.4.0.x"
+    validations:
+      required: true
+  - type: input
+    id: radio
+    attributes:
+      label: Radio and firmware
+      description: 'The app''s log shows a line like "Radio: firmware v1.x, Heltec V3, 40 channel slots" after connecting.'
+      placeholder: "Heltec V3, MeshCore companion v1.9.0"
+  - type: textarea
+    id: log
+    attributes:
+      label: The app's log
+      description: |
+        In the app, long-press the log at the bottom of the screen, choose Select all, then Copy, and paste it here. The newest lines are at the top. Remove anything private first.
+      render: text
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Before posting
+      options:
+        - label: I have removed anything from the log and screenshots that I do not want public.
+          required: true
