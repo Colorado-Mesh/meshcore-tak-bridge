@@ -1,12 +1,12 @@
 # MeshCore TAK Bridge: Design
 
-First written as a proposal on 11 October 2026. Revised 12 October 2026 to describe the app as built and tested on devices, and 13 October 2026 for the move to Colorado Mesh. Current progress and the to-do list are in [STATUS.md](STATUS.md).
+First written as a proposal on 11 October 2026. Revised 12 October 2026 to describe the app as built and tested on devices, and 13 October 2026 for the move to Colorado Mesh, the connection fixes and the app's branding. Current progress and the to-do list are in [STATUS.md](STATUS.md).
 
 ## Summary
 
 MeshCore TAK Bridge is an Android app that connects a phone to a MeshCore companion radio over Bluetooth and presents the mesh to ATAK as a local TAK server. ATAK connects to it the same way it connects to any server. Mesh nodes appear as map markers, and each mesh channel appears as an ATAK contact that carries that channel's chat in both directions.
 
-It is the phone-side counterpart to the TAK server built into the Colorado Mesh desktop client, and the two share their behaviour towards ATAK. What this app learned on devices about chat addressing has been carried back to the desktop client (Colorado-Mesh/mesh-client pull request 1253).
+It is the phone-side counterpart to the TAK server built into the Colorado Mesh desktop client, and the two share their behaviour towards ATAK. What this app learned on devices about chat addressing has been offered back to the desktop client (Colorado-Mesh/mesh-client pull request 1253, awaiting review).
 
 The project was started under Bud's GitHub account and moved into the Colorado Mesh organisation on 13 October 2026, as [Colorado-Mesh/meshcore-tak-bridge](https://github.com/Colorado-Mesh/meshcore-tak-bridge). It is written from scratch, with no code taken from TAK-MESHCORE, and licensed GPL-3.0-or-later, the same as the Colorado Mesh desktop client.
 
@@ -84,9 +84,11 @@ The app talks to the radio with the published [MeshCore companion protocol](http
 The Bluetooth layer (`GattLink`) is hand-written against Android's own API rather than built on a library, because the failures it has to avoid are about ordering and time limits, and those are easiest to guarantee directly. Its rules:
 
 - **One step at a time.** Connect, discover services, request a larger packet size (512 bytes), turn on notifications. Each step starts only when the one before it has finished, and outgoing frames are written one at a time.
-- **Every step has a time limit.** Connect 20 s, discovery 15 s, notifications 10 s, each write 5 s, pairing 60 s.
+- **Every step has a time limit.** Connect 12 s per try, discovery 15 s, notifications 10 s, each write 5 s, pairing 60 s.
+- **Connecting is tried up to 3 times.** Android, Samsung devices especially, often fails a first connection with status 133, more so straight after a scan stops or while another link to the same radio is still closing. So the link waits 0.6 s before connecting, tries again 1.5 s after a failed try, and gives up only after 3. A replaced link gets a second to close before the next one opens, and choosing the radio already being connected does not start over.
 - **The packet size request may go unanswered.** After 4 s the link carries on at the default size rather than waiting. This is where some tablets were seen to stall.
 - **Pairing.** When the radio asks for it, Android's PIN prompt appears and the link waits for the result.
+- **Choosing a radio.** A scan runs for 12 seconds and lists radios already paired first, since a radio that is connected or asleep may not be advertising. Android quietly ignores an app that starts more than five scans in 30 seconds, so the app counts its starts and says how long to wait. Each radio keeps one button for the whole scan: redrawing the list for every advert, several a second, lost taps.
 - **Reconnect.** The chosen radio is remembered by address. A dropped link is retried after 3, 5, 10, 20, 30 and then every 60 seconds, and the last known mesh picture is kept so ATAK's view survives a short gap. The user can disconnect at any time, which stops retries and forgets the radio.
 
 ### Companion protocol
@@ -228,9 +230,11 @@ Other choices:
 
 - **Android versions:** Android 8 (API 26) or later, targeting API 34.
 - **Background running:** a foreground service with a persistent notification. The Tab Active 3 held the radio link overnight without being stopped by power saving.
-- **Interface:** built in code, with no layout resources.
+- **Interface:** built in code, with no layout resources. The screen opens with a Colorado Mesh header (navy, the app icon, name and version, over a red-to-yellow line like the logo's arc) and ends with an About section linking to the source code and coloradomesh.org.
+- **Icon:** an adaptive icon, with a themed version and a matching status bar icon: the Colorado Mesh mark, its arc closed into a map crosshair, in the Colorado Mesh colours. It uses no ATAK or TAK artwork, since the project is not affiliated with the TAK Product Center. `docs/icon/make_icon.py` writes the vector drawables and a preview from one description.
+- **Application ID:** `org.coloradomesh.takbridge`, from the organisation's domain; the Kotlin packages share it.
 - **Licence:** GPL-3.0-or-later, matching the Colorado Mesh desktop client.
-- **Builds:** every push to `main` runs the tests and builds a debug APK in GitHub Actions.
+- **Builds:** changes arrive by pull request. Each pull request and each push to `main` runs the tests and builds a debug APK in GitHub Actions; CodeQL also checks each pull request. Signed release builds are still to come (see the open questions).
 
 ## Testing
 
@@ -250,8 +254,8 @@ Not yet in place: a simulated radio that runs the whole bridge end to end on a c
 | 4. Nodes on the map | Done, with type and age filters, team colour and icons |
 | 5. Channel chat | Done, with channels as contacts |
 | 5a. Direct messages and echo check | Done; direct messages tested both ways, no channel echoes seen |
-| 6. App shell | Mostly done: radio picker, connection status, map settings, background service, Colorado Mesh header and icon |
-| 7. Field test and first release | Not started; application ID settled, signed APK still needed |
+| 6. App shell | Done: radio picker, connection status, map settings, background service, Colorado Mesh header, icon and About |
+| 7. Field test and first release | In progress: build #43 is the release candidate; a signed APK needs the release signing key |
 
 Later candidates, in rough order: replying to a sender on a channel (see STATUS.md for the open questions), ATAK delivery receipts for direct messages, the radio's battery in ATAK, room server posts, splitting long messages, and sharing the phone's position to the mesh.
 
@@ -263,6 +267,7 @@ Settled by testing on devices:
 - [x] **How does ATAK address a reply?** To a reachable contact, not to a room; hence channels as contacts.
 - [x] **Will Android keep the bridge running?** Yes on both test devices, including overnight on the Tab Active 3.
 - [x] **Does pairing work across devices?** Yes on both test devices, with the PIN prompt and the packet size request allowed to go unanswered.
+- [x] **Does choosing a radio connect on the first tap?** Yes, on build #43 (13 October 2026), after the scan list stopped redrawing under the user's finger. See "Choosing a radio" above.
 - [x] **What is the application ID?** `org.coloradomesh.takbridge`, from the Colorado Mesh organisation's own domain, decided on 13 October 2026. It replaced `io.github.robertmtalbot.takbridge` before the first signed release, and the Kotlin packages use the same name. It must not change again, because Android treats a new ID as a different app.
 - [x] **Does a sent channel message ever come back, so that it shows twice in ATAK?** No. The firmware source says not (see "Echoes"), and the bridge's echo log never fired in testing on 12 October 2026. The guard stays as a safety net.
 
@@ -271,6 +276,6 @@ Still open:
 - [ ] **Do ATAK's delivery receipts work through this server?** Sending `b-t-f-d` for acknowledged direct messages would show them as delivered in ATAK, but has not been tried.
 - [ ] **Which undocumented protocol details are stable?** The contact record and advert layouts come from firmware source, not the published page, and may change between firmware versions.
 - [ ] **Should the phone's position be shared to the mesh?** It would mean writing the radio's advertised location, which conflicts with the rule of never changing radio settings.
-- [ ] **Who keeps the release signing key?** Every release must be signed with the same key, or installed copies cannot update. The maintainers need to agree who holds it and where the backup lives.
+- [ ] **Who keeps the release signing key?** Every release must be signed with the same key, or installed copies cannot update; a lost key means no more updates, and a leaked one lets someone else sign an "update". The maintainers need to agree who creates it and who holds the encrypted backup. The suggestion is one maintainer creates it, it goes into GitHub as secrets in a `release` environment that needs a maintainer's approval, and two maintainers keep the encrypted backup outside GitHub.
 
 Decided on 11 October 2026: the name is MeshCore TAK Bridge, and the licence is GPL-3.0-or-later.
