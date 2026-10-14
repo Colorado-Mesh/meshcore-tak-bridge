@@ -6,7 +6,7 @@ It is a [Colorado Mesh](https://coloradomesh.org/) project, and the phone-side c
 
 ## Status
 
-**Working, pre-release.** Tested on a Pixel 9 Pro and a Samsung Galaxy Tab Active 3. CI build #43 is the release candidate for version 0.1.0; there is no signed release yet, only debug builds.
+**Version 0.1.0, released 14 October 2026.** Tested on a Pixel 9 Pro and a Samsung Galaxy Tab Active 3. Download it from [Releases](https://github.com/Colorado-Mesh/meshcore-tak-bridge/releases).
 
 What works:
 
@@ -17,11 +17,11 @@ What works:
 - Direct messages with companion nodes, both ways, through each node's ATAK contact, with acknowledgement and up to 3 tries.
 - Never writes to the radio's settings, channels, contacts or clock.
 
-Not yet: a signed release APK, the radio's battery in ATAK.
+Not yet: the radio's battery in ATAK.
 
 ## Try it
 
-1. Download the debug APK from the latest run of the **CI** workflow under the [repository's Actions tab](https://github.com/Colorado-Mesh/meshcore-tak-bridge/actions/workflows/ci.yml) (artifact `meshcore-tak-bridge-debug-apk`), or build it yourself (below). Each CI build is signed with a different temporary debug key, so uninstall the previous build before installing a new one.
+1. Download `meshcore-tak-bridge-<version>.apk` from the latest [release](https://github.com/Colorado-Mesh/meshcore-tak-bridge/releases/latest). Later releases install over it and keep your settings. If you have a debug build from CI installed, uninstall it first: it is signed with a different key.
 2. Install it on a phone that has ATAK, open it, and tap **Start bridge**. Allow Bluetooth and notification permissions when asked.
 3. Tap **Scan for radios**, then tap your radio. Enter its PIN if Android asks to pair. The app remembers the radio and reconnects to it on its own.
 4. In ATAK, open Settings, Network Preferences, TAK Servers, and add a server with address `127.0.0.1`, port `8087`, protocol TCP. Leave SSL/TLS off.
@@ -33,6 +33,20 @@ Messages longer than the mesh allows are not sent: about 133 bytes on a channel,
 If direct messages fail both ways while channels work, a radio probably holds a stale contact for the other. Each try is logged as "flooded", and no "Mesh, direct from" line ever appears. Send a flood advert from each radio so they re-learn each other's keys, then try again.
 
 With no radio connected the bridge serves three demo markers in central Denver and a chat contact that echoes what you send, which is useful for checking the ATAK side alone.
+
+### Checking a download
+
+Every release is signed with the same Colorado Mesh key. Its certificate's SHA-256 fingerprint is
+
+```
+f59a5a05f3924b8e0dd2cc24aeb4f11405875d966d68bc25c2bbae9d38a7e554
+```
+
+(`F5:9A:5A:05:F3:92:4B:8E:0D:D2:CC:24:AE:B4:F1:14:05:87:5D:96:6D:68:BC:25:C2:BB:AE:9D:38:A7:E5:54` in `keytool`'s form). To check an APK, run `apksigner verify --print-certs meshcore-tak-bridge-<version>.apk` (from the Android SDK build tools) and compare the `certificate SHA-256 digest` line. Each release also lists the APK's own SHA-256.
+
+### Test builds
+
+Every push to `main` builds a debug APK, the `meshcore-tak-bridge-debug-apk` artifact on the [CI workflow's runs](https://github.com/Colorado-Mesh/meshcore-tak-bridge/actions/workflows/ci.yml). Debug builds are for testing: each is signed with a different temporary key, so uninstall the previous one (or the release) before installing another.
 
 ## Build and test
 

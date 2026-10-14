@@ -1,6 +1,6 @@
 # MeshCore TAK Bridge: Design
 
-First written as a proposal on 11 October 2026. Revised 12 October 2026 to describe the app as built and tested on devices, and 13 October 2026 for the move to Colorado Mesh, the connection fixes and the app's branding. Current progress and the to-do list are in [STATUS.md](STATUS.md).
+First written as a proposal on 11 October 2026. Revised 12 October 2026 to describe the app as built and tested on devices, 13 October 2026 for the move to Colorado Mesh, the connection fixes and the app's branding, and 14 October 2026 for the first release. Current progress and the to-do list are in [STATUS.md](STATUS.md).
 
 ## Summary
 
@@ -255,7 +255,7 @@ Not yet in place: a simulated radio that runs the whole bridge end to end on a c
 | 5. Channel chat | Done, with channels as contacts |
 | 5a. Direct messages and echo check | Done; direct messages tested both ways, no channel echoes seen |
 | 6. App shell | Done: radio picker, connection status, map settings, background service, Colorado Mesh header, icon and About |
-| 7. Field test and first release | In progress: build #43 is the release candidate and the release workflow is ready; waiting on the signing key and the `v0.1.0` tag |
+| 7. Field test and first release | Done: version 0.1.0 released 14 October 2026, signed with the Colorado Mesh release key |
 
 Later candidates, in rough order: replying to a sender on a channel (see STATUS.md for the open questions), ATAK delivery receipts for direct messages, the radio's battery in ATAK, room server posts, splitting long messages, and sharing the phone's position to the mesh.
 

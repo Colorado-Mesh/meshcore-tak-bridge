@@ -4,9 +4,9 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
 
 **Repository:** moved from RobertMTalbot/meshcore-tak-bridge to [Colorado-Mesh/meshcore-tak-bridge](https://github.com/Colorado-Mesh/meshcore-tak-bridge) on 2026-10-13. GitHub redirects the old address, but clones should point their remote at the new one.
 
-**Release candidate:** CI build #43 (commit `71b00f3`), on the Tab Active 3 since the evening of 13 October with no problems. It is the first build with the final application ID, `org.coloradomesh.takbridge`, and the Colorado Mesh icon and header, and the first that connects to a radio on the first tap. What stands between it and a first release is the signing key (see "Still to do").
+**Latest release: [0.1.0](https://github.com/Colorado-Mesh/meshcore-tak-bridge/releases/tag/v0.1.0), published 14 October 2026.** Version code 1, tag `v0.1.0` on commit `48a2501`, built and signed by the release workflow (run 38587020807). Its app code is that of CI build #43 (`71b00f3`), which ran on the Tab Active 3 from the evening of 13 October with no problems; the signed APK was then run on the Tab Active 3 before publishing. Signing certificate SHA-256: `f59a5a05f3924b8e0dd2cc24aeb4f11405875d966d68bc25c2bbae9d38a7e554`, checked against the key holder's own copy and read independently from the published APK.
 
-Changes since the last overnight burn-in (build #31, 12–13 October): the application ID, the radio connect and tap fixes, and the branding. Apart from the connection retries, none changes how the bridge talks to the radio or to ATAK.
+Before 0.1.0, the last overnight burn-in was build #31 (12–13 October). Since then: the application ID, the radio connect and tap fixes, and the branding. Apart from the connection retries, none changes how the bridge talks to the radio or to ATAK.
 
 ## What works (tested on a Pixel 9 Pro and a Galaxy Tab Active 3)
 
@@ -55,24 +55,21 @@ Changes since the last overnight burn-in (build #31, 12–13 October): the appli
 - Changes go into `main` through pull requests. Each pull request runs CI (tests and a debug build) and CodeQL; merge once they pass.
 - Every push to `main` builds again. The debug APK is the `meshcore-tak-bridge-debug-apk` artifact on each run, and the build number in this file is the CI run number.
 - A newer push to `main` cancels a CI run still going on an older one, so merging two pull requests in quick succession leaves one cancelled run and one complete build with both.
+- Releases: pushing a `v*` tag runs the release workflow, which waits for a maintainer's approval, then builds, signs and drafts a GitHub Release. [RELEASING.md](RELEASING.md) has the procedure; Bud holds the signing key (decided 2026-10-14).
 - Each CI build is signed with a new temporary debug key, so a debug build will not install over a different one: uninstall first. Signed releases share one key, so each installs over the last.
 - CI and the release workflow use action versions that run on Node 24 (`upload-artifact` v7, `setup-gradle` v6 with its open-source cache). Every action is pinned to a full commit rather than a tag, as CodeQL asks, since the release job can read the signing key; Dependabot proposes updates monthly as pull requests.
 - The `cot`, `takserver` and `protocol` modules are plain Kotlin with JUnit tests. `app` is the Android app, built in code; its only resources are the icons.
 
 ## Still to do
 
-1. **A signed release APK**, version 0.1.0 from build #43's code.
-   - Decided 2026-10-14: Bud creates and holds the release signing key.
-   - The release workflow (`.github/workflows/release.yml`) is in place: pushing a `v*` tag tests, builds and signs the app with the key from the `release` environment, after a maintainer approves the run, and drafts a GitHub Release. [RELEASING.md](RELEASING.md) has the whole procedure.
-   - Still to do, by Bud: create the key and back it up, create the `release` environment and its three secrets, then tag `v0.1.0`.
-   - The application ID is settled: `org.coloradomesh.takbridge` (2026-10-13). Builds from before that used `io.github.robertmtalbot.takbridge` and install as a separate app, so uninstall them once.
-2. Possibly: ATAK delivery receipts (`b-t-f-d`) for acknowledged direct messages, so ATAK shows them as delivered; and room server posts, which arrive as signed messages and are skipped for now.
-3. **Reply to a sender on a channel**, if it can be done well. Requested 2026-10-12. To work out:
+1. Possibly: ATAK delivery receipts (`b-t-f-d`) for acknowledged direct messages, so ATAK shows them as delivered; and room server posts, which arrive as signed messages and are skipped for now.
+2. **Reply to a sender on a channel**, if it can be done well. Requested 2026-10-12. To work out:
    - The reply form is `@[Name]` at the start of the text, as the MeshCore apps write it (confirmed by use, 2026-10-12). The firmware gives it no special handling: channel text is sent exactly as written, so this is a convention between apps, and the bridge only has to write the text that way.
    - ATAK's chat has no reply action, and adding one would need a plugin. The likely route is a typed convention: a message from ATAK that starts with `@Name` (or `@"Two Words"`) goes out as `@[Name] …`, so MeshCore users see a normal reply.
    - Matching the name: offer only names heard on that channel recently, ignore case, and send the text unchanged when the name does not match, so nothing is altered by surprise.
    - Received replies: show `@[Name]` as it is, or tidy it to `@Name`. Possibly mark one addressed to this radio's name.
-4. Later: radio battery in ATAK.
+3. Later: radio battery in ATAK.
+4. Housekeeping: the release run notes that Gradle 8.11.1 is out of date. Update the wrapper and the Android Gradle plugin together, in their own pull request, and check a debug build on a device.
 
 In Claude cloud sessions, `./gradlew` cannot fetch Gradle or dependencies. The plain modules' tests can still be run with the Kotlin compiler and JUnit bundled in a local Gradle install. The app is only compiled in CI. Claude cannot push to the Colorado Mesh organisation yet (the Claude GitHub App is not installed there), so its changes come as patch files that a maintainer applies with `git am` and opens as a pull request.
 
