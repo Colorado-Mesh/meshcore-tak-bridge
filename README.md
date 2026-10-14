@@ -19,6 +19,26 @@ What works:
 
 Not yet: the radio's battery in ATAK.
 
+## Screenshots
+
+ATAK on a Galaxy Tab Active 3 with the bridge running: mesh nodes along Colorado's Front Range, with repeaters as installations and companion radios as team members, and every channel on the radio as a contact at the top of the list.
+
+<p align="center">
+  <img src="docs/screenshots/atak-map-channels.jpg" width="800" alt="ATAK map of the Boulder and Denver area with MeshCore repeaters shown as blue installation symbols and companion radios as green team markers; the contact list on the right shows the mesh channels #beer, #bot, #cm-reach, #coffee, #den, #emergency, #espanol, #hamradio, #Public, #test and #testing">
+</p>
+
+Selecting a companion node shows its details, including when it last sent an advert. Chat with it from its contact.
+
+<p align="center">
+  <img src="docs/screenshots/atak-map-node.jpg" width="800" alt="ATAK map with a companion node selected; its details panel shows a Dark Green team member, Geo Chat as its connector, and the remark 'MeshCore companion, last advert 2026-10-12 15:42 UTC'">
+</p>
+
+The bridge app: what is connected, the radio, which nodes go on the map, and the icon and team colour settings.
+
+<p align="center">
+  <img src="docs/screenshots/bridge-app.jpg" width="360" alt="The MeshCore TAK Bridge app: a navy Colorado Mesh header with the app icon and version 0.1.0, 'Running on 127.0.0.1:8087, ATAK connected', the radio with 15 channels and 79 nodes on the map, node type filters, repeater and room server icon settings, and the companion team colour">
+</p>
+
 ## Try it
 
 1. Download `meshcore-tak-bridge-<version>.apk` from the latest [release](https://github.com/Colorado-Mesh/meshcore-tak-bridge/releases/latest). Later releases install over it and keep your settings. If you have a debug build from CI installed, uninstall it first: it is signed with a different key.
