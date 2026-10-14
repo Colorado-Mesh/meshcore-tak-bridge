@@ -11,6 +11,8 @@ one would let someone else sign an "update". The key is created once and kept as
 
 - **Key holder: Bud (W0RMT), decided 14 October 2026.** He created the release key and keeps the
   backups described below.
+- **The key's certificate** has SHA-256 fingerprint `f59a5a05f3924b8e0dd2cc24aeb4f11405875d966d68bc25c2bbae9d38a7e554`
+  (`F5:9A:5A:05:F3:92:4B:8E:0D:D2:CC:24:AE:B4:F1:14:05:87:5D:96:6D:68:BC:25:C2:BB:AE:9D:38:A7:E5:54` as `keytool` shows it). Every release must show this fingerprint.
 - **GitHub** keeps a copy as secrets in the repository's `release` environment. Only a release
   workflow run that a maintainer approves can use them, and GitHub never shows them again.
 - The key, its password and its base64 copy are never committed, attached to an issue, or pasted
@@ -56,9 +58,15 @@ keytool -list -v -keystore meshcore-tak-bridge-release.p12 | grep -E "Alias name
 On GitHub: the repository's **Settings → Environments → New environment**, named `release`.
 
 - **Required reviewers:** add yourself (and any other maintainer who may approve releases). Leave
-  "Prevent self-review" off if you will approve your own releases.
-- **Deployment branches and tags:** choose "Selected branches and tags" and add a **tag** rule
-  `v*`, so only version tags can use the key.
+  "Prevent self-review" off if you will approve your own releases, and press **Save protection
+  rules**.
+- **Deployment branches and tags:** choose "Selected branches and tags", then **Add deployment
+  branch or tag rule** with **Ref type: Tag** (the dialog defaults to Branch) and pattern `v*`, so
+  only version tags can use the key. With a branch rule instead, the run fails with "Tag v0.1.0 is
+  not allowed to deploy to release due to environment protection rules".
+
+If a release run starts without waiting for approval, the environment's reviewers are not set, or
+the job is using a `release` environment GitHub created by itself because none existed.
 
 ### 4. Add the three secrets to the environment
 
@@ -87,12 +95,12 @@ gh secret set RELEASE_KEYSTORE_PASSWORD --env release --repo Colorado-Mesh/meshc
 gh secret set RELEASE_KEY_ALIAS --env release --repo Colorado-Mesh/meshcore-tak-bridge --body takbridge
 ```
 
-The secrets must be **environment** secrets on `release`, not repository secrets.
+The secrets must be **environment** secrets on `release`, not repository secrets. If one is missing, the run stops at "Unpack the signing key" and names it.
 
 ## Making a release
 
-1. **Pick the build.** A CI build of `main` that has run on devices without problems (see the
-   release candidate in [STATUS.md](STATUS.md)).
+1. **Pick the build.** A CI build of `main` that has run on devices without problems, ideally
+   overnight. Name it as the release candidate at the top of [STATUS.md](STATUS.md).
 2. **Set the version** in `app/build.gradle.kts`, by pull request: `versionName` is what people see
    (`0.1.0`, `0.1.1`, `0.2.0`); `versionCode` must go up by at least 1 for every release, or phones
    will not take it as an update. The first release is already set: `versionName = "0.1.0"`,
@@ -115,20 +123,27 @@ The secrets must be **environment** secrets on `release`, not repository secrets
 7. **Publish** the draft on GitHub (edit the notes if you like). Then record the release in
    [STATUS.md](STATUS.md).
 
-After the first release, the certificate fingerprint goes in the README, so anyone can check that a
-download is genuine with `apksigner verify --print-certs`.
+Releases so far: 0.1.0 (version code 1), 14 October 2026.
+
+The certificate fingerprint is also in the README, so anyone can check that a download is genuine
+with `apksigner verify --print-certs`.
 
 ## If something goes wrong
 
-- **The run fails before the draft exists** (a missing secret, a tag that does not match
-  `versionName`, a failing test): fix the cause, then move the tag and push it again:
+- **The run fails before the draft exists because of a setting** (a missing secret, the
+  environment's rules): fix the setting, then open the run and choose **Re-run jobs → Re-run failed
+  jobs**. The tag can stay.
+- **The run fails because of the code or the workflow** (a tag that does not match `versionName`,
+  a failing test, a workflow fix): a re-run uses the workflow and code as they were at the tag, so
+  fix it by pull request, then move the tag to the new `main` and push it again:
   ```bash
   git push origin :refs/tags/v0.1.0   # delete the tag on GitHub
   git tag -d v0.1.0                   # and locally
   # fix, merge, pull, then tag and push again (step 3)
   ```
-- **A draft is wrong:** delete the draft release on GitHub, delete the tag as above, and start
-  again. A draft has not been published, so nobody has it.
+- **A draft is wrong:** delete the draft release on GitHub (its trash icon on the Releases page, or
+  `gh release delete <tag>`), delete the tag as above, and start again. A draft has not been
+  published, so nobody has it.
 - **A published release is wrong:** do not reuse its version. Fix it and release the next version
   (`0.1.1`, with a higher `versionCode`).
 
