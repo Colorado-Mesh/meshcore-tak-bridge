@@ -69,6 +69,26 @@ class ApiServerTest {
     }
 
     @Test
+    fun answersTheInvitationsRequestWithAnEmptyList() {
+        val port = server.start()
+        val reply = request(port, "/Marti/api/missions/all/invitations?clientUid=ANDROID-1")
+        assertTrue(reply, reply.startsWith("HTTP/1.1 200 OK"))
+        assertEquals(
+            "{\"version\":\"3\",\"type\":\"MissionInvitation\",\"data\":[],\"nodeId\":\"meshcore-tak-bridge\"}",
+            reply.substringAfter("\r\n\r\n"),
+        )
+        assertEquals(ApiServer.OK, ApiServer.respond("GET", "/Marti/api/missions/invitations").first)
+        assertTrue(unknown.isEmpty())
+    }
+
+    @Test
+    fun aMissionsOwnInvitationsAreStillNotFound() {
+        // Only the request for the client's own invitations is answered; one mission's invitation
+        // list is something only a real server with missions can give.
+        assertEquals(ApiServer.NOT_FOUND, ApiServer.respond("GET", "/Marti/api/missions/demo/invitations").first)
+    }
+
+    @Test
     fun aDeviceProfileRequestGetsNoContent() {
         val port = server.start()
         val reply = request(port, "/Marti/api/device/profile/connection?syncSecago=-1&clientUid=ANDROID-1")

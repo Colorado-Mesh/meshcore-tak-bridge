@@ -18,7 +18,8 @@ Before 0.1.0, the last overnight burn-in was build #31 (12–13 October). Since 
   - Connecting waits a moment after a scan and tries up to 3 times, 12 s each, since Android often fails a first try with status 133. Tapping the radio already being connected does not start over, and the scan list is cleared once a connection is under way.
 - **Remembers the chosen radio** and reconnects after a drop, retrying after 3, 5, 10, 20, 30, then every 60 seconds.
   - The Tab Active 3 held the link overnight with no power-saving problems, on an early build and again on build #31.
-- **Answers ATAK's connect-time web requests** on `127.0.0.1:8080` (server contacts, groups, feeds, profiles) with empty replies, so ATAK shows no server errors. Only the two version requests stay unanswered, by design.
+- **Answers ATAK's connect-time web requests** on `127.0.0.1:8080` (server contacts, groups, feeds, mission invitations, profiles) with empty replies, so ATAK shows no server errors. Only the two version requests stay unanswered, by design.
+  - Mission invitations were added 2026-10-16 after 0.1.0 showed "Failed to get invitations from all … (404)" for a while after ATAK connected. Not yet seen on a device.
 - **Nodes on the map:** contacts that share a position become markers.
   - Companions are team members in a chosen team colour (default Cyan).
   - Repeaters and room servers are installations, each with an optional icon-set icon (GeoOps presets).

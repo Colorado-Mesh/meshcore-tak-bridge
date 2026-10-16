@@ -130,6 +130,15 @@ class ApiServer(
         internal const val MISSION_LIST =
             "{\"version\":\"3\",\"type\":\"Mission\",\"data\":[],\"nodeId\":\"meshcore-tak-bridge\"}"
 
+        /**
+         * No invitations to Data Sync missions, in the same wrapper. ATAK asks for these when it
+         * connects (`/Marti/api/missions/all/invitations?clientUid=…`) and showed "Failed to get
+         * invitations from all … (404)" until a later poll. TAK Server answers that path, and
+         * `/Marti/api/missions/invitations`, with type `MissionInvitation` (MissionApi.java).
+         */
+        internal const val MISSION_INVITATIONS =
+            "{\"version\":\"3\",\"type\":\"MissionInvitation\",\"data\":[],\"nodeId\":\"meshcore-tak-bridge\"}"
+
         internal const val OK = "200 OK"
         internal const val NO_CONTENT = "204 No Content"
         internal const val NOT_FOUND = "404 Not Found"
@@ -145,6 +154,7 @@ class ApiServer(
          * - the server's contacts: an empty list;
          * - the server's groups (ATAK's Channels feature): an empty list, which ATAK accepts;
          * - the server's Data Sync missions ("feeds" in newer ATAK): an empty list;
+         * - invitations to Data Sync missions: an empty list;
          * - a device or tool profile: 204, which ATAK reads as "nothing new", not as an error.
          *
          * The server version is not answered: ATAK only logs that failure, and an answer would
@@ -157,6 +167,8 @@ class ApiServer(
                 clean == "/Marti/api/clientEndPoints" -> OK to "{\"type\":\"$CLIENT_LIST_TYPE\",\"data\":[]}"
                 clean == "/Marti/api/groups/all" -> OK to "{\"type\":\"$GROUP_LIST_TYPE\",\"data\":[]}"
                 clean == "/Marti/api/missions" -> OK to MISSION_LIST
+                clean == "/Marti/api/missions/all/invitations" ||
+                    clean == "/Marti/api/missions/invitations" -> OK to MISSION_INVITATIONS
                 clean.startsWith("/Marti/api/device/profile/") -> NO_CONTENT to ""
                 else -> NOT_FOUND to "{}"
             }
