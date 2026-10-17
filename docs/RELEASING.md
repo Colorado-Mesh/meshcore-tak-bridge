@@ -103,13 +103,12 @@ The secrets must be **environment** secrets on `release`, not repository secrets
    overnight. Name it as the release candidate at the top of [STATUS.md](STATUS.md).
 2. **Set the version** in `app/build.gradle.kts`, by pull request: `versionName` is what people see
    (`0.1.0`, `0.1.1`, `0.2.0`); `versionCode` must go up by at least 1 for every release, or phones
-   will not take it as an update. The first release is already set: `versionName = "0.1.0"`,
-   `versionCode = 1`.
+   will not take it as an update. Check the last release below for the numbers to go up from.
 3. **Tag the merged commit and push the tag.** The tag must be `v` plus the `versionName` exactly:
    ```bash
    git checkout main && git pull
-   git tag -a v0.1.0 -m "MeshCore TAK Bridge 0.1.0"
-   git push origin v0.1.0
+   git tag -a v0.1.1 -m "MeshCore TAK Bridge 0.1.1"
+   git push origin v0.1.1
    ```
 4. **Approve the run.** The **Release** workflow starts and waits for approval to use the
    `release` environment. On the repository's Actions tab, open the run, choose **Review
@@ -118,12 +117,20 @@ The secrets must be **environment** secrets on `release`, not repository secrets
    makes a **draft** release with `meshcore-tak-bridge-<version>.apk`, its SHA-256 file, and notes
    that include the signing certificate's fingerprint. The run's summary page shows the same
    fingerprint: it must match the one noted in step 1.
-6. **Install it from the draft** on a test device. The first time, uninstall any debug build first,
-   since debug builds are signed with a different key.
+6. **Install it from the draft** on a test device. It installs over the previous release and keeps
+   its settings. If a debug build is installed, uninstall that first, since debug builds are signed
+   with a different key.
 7. **Publish** the draft on GitHub (edit the notes if you like). Then record the release in
    [STATUS.md](STATUS.md).
 
-Releases so far: 0.1.0 (version code 1), 14 October 2026.
+Releases so far:
+
+| Version | Version code | Published | Tag on |
+| --- | --- | --- | --- |
+| [0.1.1](https://github.com/Colorado-Mesh/meshcore-tak-bridge/releases/tag/v0.1.1) | 2 | 17 October 2026 | `2b45e8d` |
+| [0.1.0](https://github.com/Colorado-Mesh/meshcore-tak-bridge/releases/tag/v0.1.0) | 1 | 14 October 2026 | `48a2501` |
+
+Both are signed with the certificate above. The next release needs `versionCode = 3` or more.
 
 The certificate fingerprint is also in the README, so anyone can check that a download is genuine
 with `apksigner verify --print-certs`.
