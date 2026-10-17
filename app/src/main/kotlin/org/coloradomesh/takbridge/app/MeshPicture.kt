@@ -83,6 +83,10 @@ class MeshPicture {
         self = info
     }
 
+    /** The radio's own name, once it has been read. */
+    val selfName: String?
+        get() = self?.name
+
     fun putContact(contact: Contact) {
         contacts[contact.publicKeyHex] = contact
     }

@@ -22,6 +22,7 @@ import org.coloradomesh.takbridge.cot.CotParser
 import org.coloradomesh.takbridge.cot.InboundChat
 import org.coloradomesh.takbridge.protocol.Channel
 import org.coloradomesh.takbridge.protocol.ChannelMessage
+import org.coloradomesh.takbridge.protocol.ChannelReplies
 import org.coloradomesh.takbridge.protocol.CompanionClient
 import org.coloradomesh.takbridge.protocol.Contact
 import org.coloradomesh.takbridge.protocol.DeviceInfo
@@ -59,6 +60,9 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
     @Volatile
     private var radio: RadioSession? = null
     private val mesh = MeshPicture()
+
+    /** Who has spoken on each channel recently, so ATAK users can reply with `@name` or `@@`. */
+    private val replies = ChannelReplies()
 
     /** Uids of the markers ATAK currently has from this bridge, so that dropped ones can be removed. */
     private val onMap: MutableSet<String> = ConcurrentHashMap.newKeySet()
@@ -127,7 +131,10 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
             return
         }
         prefs().edit().putString(PREF_ADDRESS, address).putString(PREF_NAME, name).apply()
-        if (address != wanted) mesh.clear()
+        if (address != wanted) {
+            mesh.clear()
+            replies.clear()
+        }
         wanted = address
         wantedName = name
         failures = 0
@@ -144,6 +151,7 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         radio = null
         radioUp = false
         mesh.clear()
+        replies.clear()
         BridgeStatus.update { it.copy(radio = "No radio", radioBusy = false) }
     }
 
@@ -255,6 +263,7 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
 
     override fun onChannelMessage(message: ChannelMessage) {
         BridgeStatus.log("Mesh, channel ${message.channelIndex}: ${message.text}")
+        replies.heard(message.channelIndex, message.text, Instant.now().epochSecond, mesh.selfName)
         holdOrDeliver(message)
     }
 
@@ -522,7 +531,26 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
             noteToAtak(channel, node, "Not sent: the radio is not connected.")
             return
         }
-        val bytes = chat.text.toByteArray(Charsets.UTF_8).size
+        // On a channel, "@name …" and "@@ …" become MeshCore's "@[Name] …" reply form.
+        val text = if (channel == null) chat.text else when (val outcome = replies.resolve(channel.index, chat.text, now.epochSecond)) {
+            is ChannelReplies.Outcome.Send -> {
+                outcome.repliedTo?.let { BridgeStatus.log("ATAK reply on ${channel.name}: to $it") }
+                outcome.text
+            }
+            is ChannelReplies.Outcome.Ambiguous -> {
+                val shown = outcome.names.take(MAX_NAMES_SHOWN).joinToString(", ")
+                val more = (outcome.names.size - MAX_NAMES_SHOWN).takeIf { it > 0 }?.let { " and $it more" } ?: ""
+                BridgeStatus.log("ATAK reply on ${channel.name}: @${outcome.typed} matches ${outcome.names.size} names; not sent")
+                noteToAtak(channel, null, "Not sent: @${outcome.typed} matches $shown$more. Type more of the name.")
+                return
+            }
+            is ChannelReplies.Outcome.NobodyYet -> {
+                BridgeStatus.log("ATAK reply on ${channel.name}: @@ with nobody heard recently; not sent")
+                noteToAtak(channel, null, "Not sent: nobody has spoken on this channel recently, so @@ has no one to reply to.")
+                return
+            }
+        }
+        val bytes = text.toByteArray(Charsets.UTF_8).size
         val limit = if (node != null) mesh.maxDirectTextBytes() else mesh.maxTextBytes()
         if (bytes > limit) {
             BridgeStatus.log("ATAK to mesh, \"${chat.room}\": too long ($bytes of $limit bytes); not sent")
@@ -539,8 +567,8 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
             return
         }
         val target = channel ?: return
-        BridgeStatus.log("ATAK to mesh, channel ${target.index} (${target.name}): ${chat.text}")
-        session.sendChannelText(target.index, chat.text)
+        BridgeStatus.log("ATAK to mesh, channel ${target.index} (${target.name}): $text")
+        session.sendChannelText(target.index, text)
     }
 
     /** A note from the bridge in the ATAK conversation a message was sent in: a channel's or a companion's. */
@@ -587,5 +615,8 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         private const val NOTIFICATION_ID = 1
         private const val REFRESH_MINUTES = 5L
         private const val MAX_BACKLOG = 50
+
+        /** How many matching names a "which one?" note lists. */
+        private const val MAX_NAMES_SHOWN = 5
     }
 }
