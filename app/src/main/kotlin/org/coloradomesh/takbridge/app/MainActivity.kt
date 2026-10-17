@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -302,6 +303,8 @@ class MainActivity : Activity() {
             CheckBox(this).apply {
                 text = label
                 isChecked = type.toString() in shown
+                // The theme's default box was hard to see on the dark background.
+                buttonTintList = checkboxTint()
             }
         }
         fun saveTypes() {
@@ -557,6 +560,12 @@ class MainActivity : Activity() {
         null
     }
 
+    /** Colorado Mesh yellow when ticked, light grey when not, so both show on the dark background. */
+    private fun checkboxTint() = ColorStateList(
+        arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+        intArrayOf(ARC_YELLOW, OFF_WHITE),
+    )
+
     private fun serviceIntent() = Intent(this, BridgeService::class.java)
 
     private fun toggleBridge() {
@@ -611,16 +620,21 @@ class MainActivity : Activity() {
             0 to "never hide",
         )
 
-        val SETUP_TEXT = """
-            To use the bridge:
-            1. Start the bridge, then scan and tap your MeshCore companion radio.
-            2. In ATAK open Settings, Network Preferences, TAK Servers, and add a server.
-            3. Address 127.0.0.1, port ${TakServer.DEFAULT_PORT}, protocol TCP. Leave SSL/TLS off.
-            4. Mesh nodes that share a position appear on the map, and each radio channel
-               appears in ATAK's contacts: #name for hashtag channels, a lock for private ones. Messages sent to that
-               contact go out on that channel.
-            The bridge reads from the radio and sends channel messages. It never changes
-            the radio's settings or channels.
-        """.trimIndent()
+        /**
+         * One line per step, with no line breaks inside a sentence: the screen wraps the text
+         * itself, and breaks written into it showed up mid-sentence.
+         */
+        val SETUP_TEXT = listOf(
+            "To use the bridge:",
+            "1. Start the bridge, then scan and tap your MeshCore companion radio.",
+            "2. In ATAK, open Settings, Network Preferences, TAK Servers, and add a server: address 127.0.0.1, " +
+                "port ${TakServer.DEFAULT_PORT}, protocol TCP, with SSL/TLS off.",
+            "3. Nodes that share a position appear on the map. Each radio channel appears in ATAK's contacts, " +
+                "starting with #, and private channels show a lock. Chat with a channel's contact to send on that channel.",
+            "4. To message someone directly, chat with the contact of their companion node.",
+            "5. To reply to someone on a channel, start with @ and the first part of their name (@silver), " +
+                "or @@ for whoever spoke last.",
+            "The bridge never changes the radio's settings, channels, contacts or clock.",
+        ).joinToString("\n")
     }
 }
