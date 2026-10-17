@@ -35,6 +35,11 @@ Before 0.1.0, the last overnight burn-in was build #31 (12–13 October). Since 
   - A sent message waits for the recipient's acknowledgement and is tried up to 3 times with its first timestamp. The path is never reset, since that would write to the radio's contacts. No acknowledgement after 3 tries puts a note in that conversation; so does a refusal. Checked on a device: with the other radio off, the "Not confirmed" note appears.
   - Up to 160 bytes. Held, like channel text, until ATAK connects.
   - A retried copy of a received message (same sender, timestamp and text) is dropped and logged.
+- **Replies on a channel** (built 2026-10-17, not yet seen on a device). MeshCore has no reply-to-message feature; its apps start a reply with `@[Name]`, which the firmware sends like any text (confirmed by use, 2026-10-12). ATAK's chat has no reply action, so a reply is typed in a channel's chat:
+  - `@silver are you on?` goes out as `@[Silver Eagle] are you on?` when exactly one person heard on that channel in the last 24 hours has a name starting "silver". Case, spaces, emoji and punctuation are ignored, so `@w0rmt` finds `🔥 W0RMT 03`. An exact match wins over longer names it starts; `@"Two Words"` matches a whole name.
+  - `@@ thanks` replies to whoever spoke last on that channel.
+  - Several matches: nothing is sent, and a note in the chat lists them (up to 5). `@@` on a quiet channel: nothing is sent, with a note. No match: the text goes out exactly as typed, so a message that just starts with "@" is not changed by surprise. Text already in the `@[Name]` form is left alone.
+  - Senders are learned from channel messages as they arrive (up to 50 per channel, by this phone's clock), forgotten when another radio is chosen, and never include this radio's own name. The logic is `ChannelReplies` in the `protocol` module, with tests.
 - **No channel echoes** (checked 2026-10-12). A channel message sent from ATAK did not come back: the `Echo check:` log line never appeared. This matches the firmware, which marks its own flooded packets as seen. The guard stays in place: a received channel message matching one just sent from ATAK (`"<radio name>: <text>"`, same channel, within 15 minutes) is dropped and logged.
 - **Never writes to the radio's settings, channels, contacts or clock.**
 - **Colorado Mesh branding** (checked on a device, 13 October):
@@ -64,11 +69,7 @@ Before 0.1.0, the last overnight burn-in was build #31 (12–13 October). Since 
 ## Still to do
 
 1. Possibly: ATAK delivery receipts (`b-t-f-d`) for acknowledged direct messages, so ATAK shows them as delivered; and room server posts, which arrive as signed messages and are skipped for now.
-2. **Reply to a sender on a channel**, if it can be done well. Requested 2026-10-12. To work out:
-   - The reply form is `@[Name]` at the start of the text, as the MeshCore apps write it (confirmed by use, 2026-10-12). The firmware gives it no special handling: channel text is sent exactly as written, so this is a convention between apps, and the bridge only has to write the text that way.
-   - ATAK's chat has no reply action, and adding one would need a plugin. The likely route is a typed convention: a message from ATAK that starts with `@Name` (or `@"Two Words"`) goes out as `@[Name] …`, so MeshCore users see a normal reply.
-   - Matching the name: offer only names heard on that channel recently, ignore case, and send the text unchanged when the name does not match, so nothing is altered by surprise.
-   - Received replies: show `@[Name]` as it is, or tidy it to `@Name`. Possibly mark one addressed to this radio's name.
+2. **Replies, next steps** (after a device test of what is built; see "Replies on a channel" above): tidy received `@[Name]` to `@Name` in ATAK, and possibly mark a reply addressed to this radio's name so it stands out on a busy channel. Per-person reply contacts in ATAK were considered and set aside (2026-10-17): too much clutter in the contact list.
 3. Later: radio battery in ATAK.
 4. Housekeeping: the release run notes that Gradle 8.11.1 is out of date. Update the wrapper and the Android Gradle plugin together, in their own pull request, and check a debug build on a device.
 

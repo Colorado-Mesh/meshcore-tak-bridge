@@ -15,6 +15,7 @@ What works:
 - Every node that shares a position as an ATAK marker: companions as team members in a team colour you choose, repeaters and room servers as installations (optionally with an icon from an ATAK icon set), sensors as sensors. Filters by node type and by how recently a node was heard.
 - Every channel on the radio as an ATAK contact, two-way: channel text arrives as messages from that contact, and a message you send to it goes out on that channel.
 - Direct messages with companion nodes, both ways, through each node's ATAK contact, with acknowledgement and up to 3 tries.
+- Replies on a channel in MeshCore's `@[Name]` form, typed as `@` and the start of a name, or `@@` for whoever spoke last.
 - Never writes to the radio's settings, channels, contacts or clock.
 
 Not yet: the radio's battery in ATAK.
@@ -45,7 +46,7 @@ The bridge app: what is connected, the radio, which nodes go on the map, and the
 2. Install it on a phone that has ATAK, open it, and tap **Start bridge**. Allow Bluetooth and notification permissions when asked.
 3. Tap **Scan for radios**, then tap your radio. Enter its PIN if Android asks to pair. The app remembers the radio and reconnects to it on its own.
 4. In ATAK, open Settings, Network Preferences, TAK Servers, and add a server with address `127.0.0.1`, port `8087`, protocol TCP. Leave SSL/TLS off.
-5. Mesh nodes with a position appear on the map. Each channel appears in ATAK's contacts, grouped at the top because every channel name starts with `#`: `#Public`, hashtag channels as MeshCore writes them (`#denver`), and private channels with a lock (`#🔒 SAR Team`). Open a channel's contact to chat on it. Messages you send to a channel contact go out over the radio under the radio's name.
+5. Mesh nodes with a position appear on the map. Each channel appears in ATAK's contacts, grouped at the top because every channel name starts with `#`: `#Public`, hashtag channels as MeshCore writes them (`#denver`), and private channels with a lock (`#🔒 SAR Team`). Open a channel's contact to chat on it. Messages you send to a channel contact go out over the radio under the radio's name. To reply to someone, start with `@` and the first part of their name (`@silver are you on?` goes out as `@[Silver Eagle] are you on?`), or `@@` to reply to whoever spoke last. If the start of the name fits several people, nothing is sent and the chat says who matched.
 6. To message a person directly, open the contact of their companion node in ATAK and chat with it. Messages from them arrive the same way. A companion with no position appears in ATAK's contacts once a message has passed between you. Repeaters and room servers cannot be messaged.
 
 Messages longer than the mesh allows are not sent: about 133 bytes on a channel, less the radio's name, and 160 bytes direct. The bridge says so in the chat instead. A direct message that is never acknowledged after 3 tries gets a note in its conversation.

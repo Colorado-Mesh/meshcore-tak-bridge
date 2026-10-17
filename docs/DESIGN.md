@@ -1,6 +1,6 @@
 # MeshCore TAK Bridge: Design
 
-First written as a proposal on 11 October 2026. Revised 12 October 2026 to describe the app as built and tested on devices, 13 October 2026 for the move to Colorado Mesh, the connection fixes and the app's branding, and 14 October 2026 for the first release. Current progress and the to-do list are in [STATUS.md](STATUS.md).
+First written as a proposal on 11 October 2026. Revised 12 October 2026 to describe the app as built and tested on devices, 13 October 2026 for the move to Colorado Mesh, the connection fixes and the app's branding, 14 October 2026 for the first release, and 17 October 2026 for replies on a channel. Current progress and the to-do list are in [STATUS.md](STATUS.md).
 
 ## Summary
 
@@ -173,6 +173,25 @@ Direct messages use the same pattern as channels: a contact ATAK can reach stand
 
 Room server posts arrive as signed messages and are skipped. The radio's log says so once per connection.
 
+## Replies on a channel
+
+MeshCore has no reply-to-message feature. Its apps start a reply with `@[Name]`, and the firmware sends that like any other channel text, so a reply is a convention between apps. ATAK's chat has no reply action, and adding one would need a plugin. So a reply is typed in the channel's chat, and the bridge writes it in MeshCore's form:
+
+| Typed in ATAK | Sent on the channel |
+| --- | --- |
+| `@silver are you on?` | `@[Silver Eagle] are you on?`, when exactly one recent sender's name starts with "silver" |
+| `@"Silver Eagle" ok` | `@[Silver Eagle] ok`: a whole name, spaces included |
+| `@@ thanks` | `@[<whoever spoke last on this channel>] thanks` |
+| `@home in 10`, with no one called Home | `@home in 10`, unchanged |
+| `@[Silver Eagle] hi` | unchanged |
+
+- **Matching** ignores case, spaces, emoji and punctuation, since names such as `🔥 W0RMT 03` are hard to type exactly. A name that matches exactly wins over longer names it starts.
+- **Nothing is sent by guesswork.** When several names match, or `@@` is used on a quiet channel, nothing goes out, and a note in that chat says why, listing up to five matching names.
+- **Who can be replied to:** senders heard on that channel in the last 24 hours, up to 50 per channel, read from MeshCore's `Name: text` form as messages arrive and timed by the phone's clock, not the sender's. The radio's own name is never one of them. The list is cleared when a different radio is chosen.
+- **The length limit** applies to the text as sent, `@[Name]` included.
+
+Per-person reply contacts in ATAK were considered, since they would need no typing, but on a busy mesh they would crowd the contact list. Received replies are shown as they arrive, `@[Name]` and all.
+
 ## Echoes
 
 A channel message sent from ATAK should never come back to ATAK. The firmware marks each packet it floods as already seen, so a repeater's rebroadcast is dropped, and sending a channel message produces no received-message frame. The bridge still checks. A received channel message with the same channel and text as one it sent in the last 15 minutes (`"<radio name>: <text>"`, the form the radio transmits) is dropped and logged as an echo, so a device test can show whether it ever happens. The check could also drop an identical message from a different node with the same name as this radio. That is unlikely, and it is logged.
@@ -190,6 +209,7 @@ A channel message sent from ATAK should never come back to ATAK. The firmware ma
 | Channel on the radio | Contact, with a chat | See "Chat: channels as contacts" |
 | Channel message heard | Message from that channel's contact | Sender's name kept in the text |
 | Message sent to a channel contact in ATAK | Channel message from this radio | Goes out under the radio's own name |
+| `@name …` or `@@ …` sent to a channel contact | Channel message starting `@[Name]` | MeshCore's reply form; see "Replies on a channel" |
 | Direct message heard | Message from that node's contact | |
 | Message sent to a companion's contact in ATAK | Direct message to that node | Acknowledged, or tried up to 3 times |
 
@@ -258,7 +278,7 @@ Not yet in place: a simulated radio that runs the whole bridge end to end on a c
 | 6. App shell | Done: radio picker, connection status, map settings, background service, Colorado Mesh header, icon and About |
 | 7. Field test and first release | Done: version 0.1.0 released 14 October 2026, signed with the Colorado Mesh release key |
 
-Later candidates, in rough order: replying to a sender on a channel (see STATUS.md for the open questions), ATAK delivery receipts for direct messages, the radio's battery in ATAK, room server posts, splitting long messages, and sharing the phone's position to the mesh.
+Later candidates, in rough order: ATAK delivery receipts for direct messages, the radio's battery in ATAK, room server posts, splitting long messages, and sharing the phone's position to the mesh.
 
 ## Open questions and risks
 
