@@ -1,20 +1,17 @@
 # Project status
 
-Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2026-10-13.
+Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2026-10-17.
 
 **Repository:** moved from RobertMTalbot/meshcore-tak-bridge to [Colorado-Mesh/meshcore-tak-bridge](https://github.com/Colorado-Mesh/meshcore-tak-bridge) on 2026-10-13. GitHub redirects the old address, but clones should point their remote at the new one.
 
-**Latest release: [0.1.0](https://github.com/Colorado-Mesh/meshcore-tak-bridge/releases/tag/v0.1.0), published 14 October 2026.** Version code 1, tag `v0.1.0` on commit `48a2501`, built and signed by the release workflow (run 38587020807). Its app code is that of CI build #43 (`71b00f3`), which ran on the Tab Active 3 from the evening of 13 October with no problems; the signed APK was then run on the Tab Active 3 before publishing. Signing certificate SHA-256: `f59a5a05f3924b8e0dd2cc24aeb4f11405875d966d68bc25c2bbae9d38a7e554`, checked against the key holder's own copy and read independently from the published APK.
-
-Before 0.1.0, the last overnight burn-in was build #31 (12–13 October). Since then: the application ID, the radio connect and tap fixes, and the branding. Apart from the connection retries, none changes how the bridge talks to the radio or to ATAK.
-
-**Release candidate: 0.1.1** (version code 2). Since 0.1.0:
+**Latest release: [0.1.1](https://github.com/Colorado-Mesh/meshcore-tak-bridge/releases/tag/v0.1.1), published 17 October 2026.** Version code 2, tag `v0.1.1` on commit `2b45e8d`, built and signed by the release workflow (run 39063380535). It installs over 0.1.0 and keeps the radio and map settings. Signed with the same certificate as 0.1.0 (SHA-256 `f59a5a05f3924b8e0dd2cc24aeb4f11405875d966d68bc25c2bbae9d38a7e554`), read independently from the published APK, whose checksum also matches. Since 0.1.0:
 - Replies on a channel, `@name` and `@@` (checked on a device, 2026-10-17).
 - An answer for ATAK's mission-invitations request, so "Failed to get invitations from all … (404)" no longer appears at connect (checked on a device, 2026-10-17).
 - The setup text on the bridge's screen: no more line breaks mid-sentence, and it now covers direct messages and replies.
 - The node-type checkboxes are tinted (Colorado Mesh yellow when ticked, light grey when not); they were hard to see on the dark background.
 
-The two screen fixes still need a look on a device before tagging `v0.1.1`.
+**Earlier releases:**
+- [0.1.0](https://github.com/Colorado-Mesh/meshcore-tak-bridge/releases/tag/v0.1.0), 14 October 2026: version code 1, tag `v0.1.0` on `48a2501` (run 38587020807). Its app code was that of CI build #43 (`71b00f3`), run on the Tab Active 3 from the evening of 13 October with no problems. The first signed release; the certificate was checked against the key holder's own copy. Before it, the last overnight burn-in was build #31 (12–13 October).
 
 ## What works (tested on a Pixel 9 Pro and a Galaxy Tab Active 3)
 

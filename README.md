@@ -6,7 +6,7 @@ It is a [Colorado Mesh](https://coloradomesh.org/) project, and the phone-side c
 
 ## Status
 
-**Version 0.1.0, released 14 October 2026.** Tested on a Pixel 9 Pro and a Samsung Galaxy Tab Active 3. Download it from [Releases](https://github.com/Colorado-Mesh/meshcore-tak-bridge/releases).
+**Version 0.1.1, released 17 October 2026.** Tested on a Pixel 9 Pro and a Samsung Galaxy Tab Active 3. Download it from [Releases](https://github.com/Colorado-Mesh/meshcore-tak-bridge/releases).
 
 What works:
 
