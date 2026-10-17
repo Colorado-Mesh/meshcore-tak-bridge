@@ -8,6 +8,14 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
 
 Before 0.1.0, the last overnight burn-in was build #31 (12–13 October). Since then: the application ID, the radio connect and tap fixes, and the branding. Apart from the connection retries, none changes how the bridge talks to the radio or to ATAK.
 
+**Release candidate: 0.1.1** (version code 2). Since 0.1.0:
+- Replies on a channel, `@name` and `@@` (checked on a device, 2026-10-17).
+- An answer for ATAK's mission-invitations request, so "Failed to get invitations from all … (404)" no longer appears at connect (checked on a device, 2026-10-17).
+- The setup text on the bridge's screen: no more line breaks mid-sentence, and it now covers direct messages and replies.
+- The node-type checkboxes are tinted (Colorado Mesh yellow when ticked, light grey when not); they were hard to see on the dark background.
+
+The two screen fixes still need a look on a device before tagging `v0.1.1`.
+
 ## What works (tested on a Pixel 9 Pro and a Galaxy Tab Active 3)
 
 - **TAK server for ATAK** on `127.0.0.1:8087`, plain TCP, loopback only, one client.
@@ -19,7 +27,7 @@ Before 0.1.0, the last overnight burn-in was build #31 (12–13 October). Since 
 - **Remembers the chosen radio** and reconnects after a drop, retrying after 3, 5, 10, 20, 30, then every 60 seconds.
   - The Tab Active 3 held the link overnight with no power-saving problems, on an early build and again on build #31.
 - **Answers ATAK's connect-time web requests** on `127.0.0.1:8080` (server contacts, groups, feeds, mission invitations, profiles) with empty replies, so ATAK shows no server errors. Only the two version requests stay unanswered, by design.
-  - Mission invitations were added 2026-10-16 after 0.1.0 showed "Failed to get invitations from all … (404)" for a while after ATAK connected. Not yet seen on a device.
+  - Mission invitations were added 2026-10-16 after 0.1.0 showed "Failed to get invitations from all … (404)" for a while after ATAK connected. Checked on a device, 2026-10-17.
 - **Nodes on the map:** contacts that share a position become markers.
   - Companions are team members in a chosen team colour (default Cyan).
   - Repeaters and room servers are installations, each with an optional icon-set icon (GeoOps presets).
@@ -35,7 +43,7 @@ Before 0.1.0, the last overnight burn-in was build #31 (12–13 October). Since 
   - A sent message waits for the recipient's acknowledgement and is tried up to 3 times with its first timestamp. The path is never reset, since that would write to the radio's contacts. No acknowledgement after 3 tries puts a note in that conversation; so does a refusal. Checked on a device: with the other radio off, the "Not confirmed" note appears.
   - Up to 160 bytes. Held, like channel text, until ATAK connects.
   - A retried copy of a received message (same sender, timestamp and text) is dropped and logged.
-- **Replies on a channel** (built 2026-10-17, not yet seen on a device). MeshCore has no reply-to-message feature; its apps start a reply with `@[Name]`, which the firmware sends like any text (confirmed by use, 2026-10-12). ATAK's chat has no reply action, so a reply is typed in a channel's chat:
+- **Replies on a channel** (checked on a device, 2026-10-17). MeshCore has no reply-to-message feature; its apps start a reply with `@[Name]`, which the firmware sends like any text (confirmed by use, 2026-10-12). ATAK's chat has no reply action, so a reply is typed in a channel's chat:
   - `@silver are you on?` goes out as `@[Silver Eagle] are you on?` when exactly one person heard on that channel in the last 24 hours has a name starting "silver". Case, spaces, emoji and punctuation are ignored, so `@w0rmt` finds `🔥 W0RMT 03`. An exact match wins over longer names it starts; `@"Two Words"` matches a whole name.
   - `@@ thanks` replies to whoever spoke last on that channel.
   - Several matches: nothing is sent, and a note in the chat lists them (up to 5). `@@` on a quiet channel: nothing is sent, with a note. No match: the text goes out exactly as typed, so a message that just starts with "@" is not changed by surprise. Text already in the `@[Name]` form is left alone.
@@ -69,7 +77,7 @@ Before 0.1.0, the last overnight burn-in was build #31 (12–13 October). Since 
 ## Still to do
 
 1. Possibly: ATAK delivery receipts (`b-t-f-d`) for acknowledged direct messages, so ATAK shows them as delivered; and room server posts, which arrive as signed messages and are skipped for now.
-2. **Replies, next steps** (after a device test of what is built; see "Replies on a channel" above): tidy received `@[Name]` to `@Name` in ATAK, and possibly mark a reply addressed to this radio's name so it stands out on a busy channel. Per-person reply contacts in ATAK were considered and set aside (2026-10-17): too much clutter in the contact list.
+2. **Replies, next steps** (see "Replies on a channel" above): tidy received `@[Name]` to `@Name` in ATAK, and possibly mark a reply addressed to this radio's name so it stands out on a busy channel. Per-person reply contacts in ATAK were considered and set aside (2026-10-17): too much clutter in the contact list.
 3. Later: radio battery in ATAK.
 4. Housekeeping: the release run notes that Gradle 8.11.1 is out of date. Update the wrapper and the Android Gradle plugin together, in their own pull request, and check a debug build on a device.
 
