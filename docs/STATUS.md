@@ -64,7 +64,7 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
 
 ## How work is delivered
 
-- Changes go into `main` through pull requests. Each pull request runs CI (tests and a debug build) and CodeQL; merge once they pass.
+- Changes go into `main` through pull requests. Each pull request runs CI (tests and a debug build) and CodeQL, and gets a CodeRabbit review (from 2026-10-18; settings in `.coderabbit.yaml`, which spells out the design rules for it). Merge once they pass.
 - Every push to `main` builds again. The debug APK is the `meshcore-tak-bridge-debug-apk` artifact on each run, and the build number in this file is the CI run number.
 - A newer push to `main` cancels a CI run still going on an older one, so merging two pull requests in quick succession leaves one cancelled run and one complete build with both.
 - Releases: pushing a `v*` tag runs the release workflow, which waits for a maintainer's approval, then builds, signs and drafts a GitHub Release. [RELEASING.md](RELEASING.md) has the procedure; Bud holds the signing key (decided 2026-10-14).
