@@ -49,7 +49,7 @@ A bridge app avoids the last two by design: it speaks only the standard TAK serv
 - iPhone support. iTAK cannot be served this way from an Android app.
 - Anything inside ATAK's interface: no custom tools, menus or buttons. That would need a plugin.
 
-Direct messages with companion nodes were left out of the first pass and added on 12 October 2026 (see "Direct messages" below).
+Direct messages with companion nodes were left out of the first pass and added on 12 October 2026 (see "Direct messages" below). Tracking chosen companions by asking them for their position was added on 19 October 2026 (see "Tracking").
 
 ## Architecture
 
@@ -101,7 +101,7 @@ The `CompanionClient` in the `protocol` module runs the conversation once the li
 4. Fetch waiting messages, then react to the radio's own "messages waiting" and "advert heard" notices.
 5. Read the battery voltage, then again every 5 minutes. Firmware that refuses the request is not asked again.
 
-The client never sets the radio's clock, channels, contacts, paths or settings. Sending channel text and sending a direct message are the only commands that cause a transmission.
+The client never sets the radio's clock, channels, contacts, paths or settings. Sending channel text, sending a direct message, and asking a tracked companion for its position are the only commands that cause a transmission.
 
 The protocol page is marked as still in development and does not document everything the app uses, such as the contact record layout. Those details come from the MeshCore firmware source, are checked against real radios, and are covered by tests with recorded frames.
 
@@ -201,6 +201,16 @@ The reading appears on the bridge's screen and in its notification. As it falls 
 
 ATAK itself shows nothing. The radio is not on the map (the user's own marker is the phone), ATAK's battery field belongs to position reports, and a note in each channel's chat would mark every channel unread. A "Bridge" contact for radio notices was considered and set aside, to keep the contact list short.
 
+## Tracking
+
+Adverts carry a position, but a companion adverts only when its owner triggers it, so markers placed from adverts rarely move. For people who have agreed to be followed, the bridge asks instead.
+
+- **Choosing whom:** up to 10 companions, ticked on the bridge's screen; the list is the radio's companion contacts. ATAK has no menu the bridge could add a "track" choice to without a plugin.
+- **Asking:** MeshCore's telemetry request (`CMD_SEND_TELEMETRY_REQ`, 39) to each in turn, about every 5 minutes (2 to 30 can be chosen, 1 minute at the least), and only while ATAK is connected. The radio keeps track of one such request at a time, so the next is sent only when the last has been answered or has timed out (the radio's own estimate, plus 2 s).
+- **The answer:** `PUSH_CODE_TELEMETRY_RESPONSE` (0x8B), carrying the node's key prefix and its telemetry in Cayenne LPP form. The bridge reads the node's own battery voltage and GPS entry (channel 1; latitude and longitude in units of 0.0001°, about 11 m) and stops at any type whose size it does not know. A node includes its position only when its GPS is on and its owner allows location telemetry for everyone or for the asking radio (`TELEM_MODE_ALLOW_ALL`, or `ALLOW_FLAGS` with the location flag on this radio's contact). A request it does not allow gets no answer at all, so "no answer" can mean either refused or out of range.
+- **On the map:** the marker moves to the reported position when that is newer than the node's advert, and a tracked node shows even when the type or age filters would hide it. ATAK draws tracks for moving contacts itself, so the bridge draws none. Altitude is left out: MeshCore's GPS altitude is most likely height above sea level, while CoT's `hae` is height above the ellipsoid, about 17 m different around Denver.
+- **On the screen:** a line per tracked node, with its last position and time, or why there is none. The log notes only changes.
+
 ## Echoes
 
 A channel message sent from ATAK should never come back to ATAK. The firmware marks each packet it floods as already seen, so a repeater's rebroadcast is dropped, and sending a channel message produces no received-message frame. The bridge still checks. A received channel message with the same channel and text as one it sent in the last 15 minutes (`"<radio name>: <text>"`, the form the radio transmits) is dropped and logged as an echo, so a device test can show whether it ever happens. The check could also drop an identical message from a different node with the same name as this radio. That is unlikely, and it is logged.
@@ -236,13 +246,14 @@ A channel message sent from ATAK should never come back to ATAK. The firmware ma
 The app's exposure is small because nothing leaves the phone except what the radio transmits.
 
 - **Loopback only.** The TAK server binds to `127.0.0.1`, and so does the web API responder on port 8080, so no other device on a network can reach either. The responder holds no data: it only ever answers with an empty contact list. Other apps on the same phone can, which is why the server accepts a single client and the app shows when one is connected.
-- **Transmitting is the user's own act.** Only messages the user sends to a channel or companion contact are transmitted, from the user's own radio. Retries of an unacknowledged direct message are the only transmissions the bridge repeats on its own, and they stop after 3 tries.
+- **Transmitting is the user's own act.** Only messages the user sends to a channel or companion contact are transmitted, from the user's own radio, plus position requests to companions the user chose to track, while ATAK is connected. Retries of an unacknowledged direct message stop after 3 tries; position requests are capped at 10 nodes and at most one a minute each.
+- **Location only by consent.** A node answers a position request only when its owner has allowed location telemetry, for everyone or for this radio; otherwise it sends nothing back. Positions are kept in memory to place markers and are never stored or passed on beyond the ATAK on the same phone.
 - **No commands to infrastructure.** Chat is never sent to a repeater or room server, which could read it as an admin command.
 - **No configuration writes.** The app cannot alter channels, keys, contacts, the clock or radio settings. Channel keys are read only to classify the channel and are not kept.
 - **Untrusted input.** Everything from the radio and from ATAK is parsed defensively with length limits, and outgoing events are built from parsed fields with XML escaping, never by passing text through.
 - **Rate limit.** At most 10 chat messages a minute are accepted from ATAK, and at most 5 can wait to be sent, so a misbehaving client cannot flood a slow shared channel.
 - **Permissions.** Bluetooth connect and scan, notifications, and foreground service. Location is requested only on Android 11 and older, where Bluetooth scanning requires it. Android requires the internet permission for any network socket, including a loopback one, so the app declares it but makes no outside connections.
-- **No telemetry.** The app collects nothing and connects to nothing beyond loopback.
+- **No analytics.** The app reports nothing about its use and connects to nothing beyond loopback. (MeshCore's telemetry requests, used for tracking, go over the mesh to nodes the user chose.)
 
 ## Technology and repository layout
 

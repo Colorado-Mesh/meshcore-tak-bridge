@@ -57,8 +57,8 @@ reviews:
         and offset before reading, and never let a malformed frame throw out of the client.
         One command is outstanding at a time, each with a time limit; check that a queued
         command cannot stall the queue. The only commands the bridge sends are reads
-        (app start, device query, contacts, channels, waiting messages) and the two send-text
-        commands; flag anything that sets, adds, removes or resets state on the radio.
+        (app start, device query, contacts, channels, waiting messages, battery), the two
+        send-text commands, and the telemetry request used for tracking; flag anything that sets, adds, removes or resets state on the radio.
         Undocumented layouts come from the MeshCore firmware source (MyMesh.cpp,
         BaseChatMesh.cpp); ask for a reference when a new one appears. ChannelReplies turns
         "@name" and "@@" into MeshCore's "@[Name]" reply form and must never guess between

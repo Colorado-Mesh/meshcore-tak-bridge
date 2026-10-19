@@ -18,7 +18,9 @@ What works:
 - Replies on a channel in MeshCore's `@[Name]` form, typed as `@` and the start of a name, or `@@` for whoever spoke last.
 - Never writes to the radio's settings, channels, contacts or clock.
 
-Since 0.1.1, in test builds: the radio's battery on the bridge's screen and in its notification, with an alert at 20% and 10% that shows over ATAK. The percentage is estimated from a lithium cell's discharge curve, so as the battery runs down it reads lower than the MeshCore app's, which scales evenly from 3.0 V to 4.2 V: at 3.5 V the bridge says about 20% and the MeshCore app 42%.
+Since 0.1.1, in test builds: tracking. Choose up to 10 companions on the bridge's screen, and while ATAK is connected the bridge asks each in turn for its position (every 2 to 30 minutes, 5 by default) and moves its marker, so ATAK can draw its track. It only works with people who have agreed beforehand: their radio needs a GPS that is on, and its owner must allow location telemetry for everyone or for your radio. MeshCore sends no answer at all otherwise.
+
+Also since 0.1.1, in test builds: the radio's battery on the bridge's screen and in its notification, with an alert at 20% and 10% that shows over ATAK. The percentage is estimated from a lithium cell's discharge curve, so as the battery runs down it reads lower than the MeshCore app's, which scales evenly from 3.0 V to 4.2 V: at 3.5 V the bridge says about 20% and the MeshCore app 42%.
 
 ## Screenshots
 
