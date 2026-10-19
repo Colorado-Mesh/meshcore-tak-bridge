@@ -169,7 +169,7 @@ Direct messages use the same pattern as channels: a contact ATAK can reach stand
 - **Duplicates.** When a sender's acknowledgement is lost, the sender tries again with the same timestamp and text. The radio delivers each try, so the bridge drops a repeat of a message from the same sender with the same timestamp and text in the last 15 minutes, and logs it.
 - **Sending.** A message to a companion's contact is sent with the companion protocol's send-text command, addressed by the 6-byte key prefix, up to 160 bytes. The radio replies with the code the recipient's acknowledgement will carry and an estimate of how long it should take.
 - **Acknowledgement and retries.** If no acknowledgement arrives within that estimate (kept between 2 and 60 seconds) plus 2 seconds, the message is sent again with the same timestamp, up to 3 tries in all. An acknowledgement of any try counts. The MeshCore apps also reset the contact's path before the last try; the bridge does not, because that would write to the radio's contacts.
-- **Feedback in ATAK.** Delivery is logged. No acknowledgement after 3 tries, or a refusal by the radio (for example, a node it does not know), puts a note in that conversation. ATAK's own delivery receipts (`b-t-f-d`) are not sent yet.
+- **Feedback in ATAK.** When the recipient acknowledges a message, the bridge sends ATAK a delivery receipt (`b-t-f-d`), and ATAK shows its message as delivered. The receipt is built like ATAK's own (`GeoChatService.sendStatusMessage` in ATAK's source): its event uid is ATAK's id for the message, which the bridge reads from the chat ATAK sent (`__chat messageId`, or the end of the event uid) and keeps until the radio reports the outcome, for up to 100 messages at once. No acknowledgement after 3 tries, or a refusal by the radio (for example, a node it does not know), puts a note in that conversation instead. Channel messages get no receipt: MeshCore floods them without acknowledgement.
 
 Room server posts arrive as signed messages and are skipped. The radio's log says so once per connection.
 
@@ -212,6 +212,7 @@ A channel message sent from ATAK should never come back to ATAK. The firmware ma
 | `@name …` or `@@ …` sent to a channel contact | Channel message starting `@[Name]` | MeshCore's reply form; see "Replies on a channel" |
 | Direct message heard | Message from that node's contact | |
 | Message sent to a companion's contact in ATAK | Direct message to that node | Acknowledged, or tried up to 3 times |
+| The node's acknowledgement | Delivery receipt (`b-t-f-d`) for that message | ATAK shows it as delivered |
 
 **Markers.** Each node's uid is built from its MeshCore public key (`MESHCORE-` and the first 16 hex digits), so it keeps its marker across restarts. The remarks give the node kind and its last advert time.
 
@@ -278,7 +279,7 @@ Not yet in place: a simulated radio that runs the whole bridge end to end on a c
 | 6. App shell | Done: radio picker, connection status, map settings, background service, Colorado Mesh header, icon and About |
 | 7. Field test and first release | Done: version 0.1.0 released 14 October 2026, signed with the Colorado Mesh release key; 0.1.1 followed on 17 October |
 
-Later candidates, in rough order: ATAK delivery receipts for direct messages, the radio's battery in ATAK, room server posts, splitting long messages, and sharing the phone's position to the mesh.
+Later candidates, in rough order: the radio's battery in ATAK, room server posts, splitting long messages, and sharing the phone's position to the mesh.
 
 ## Open questions and risks
 
@@ -294,7 +295,7 @@ Settled by testing on devices:
 
 Still open:
 
-- [ ] **Do ATAK's delivery receipts work through this server?** Sending `b-t-f-d` for acknowledged direct messages would show them as delivered in ATAK, but has not been tried.
+- [ ] **Do ATAK's delivery receipts work through this server?** The bridge sends `b-t-f-d` for acknowledged direct messages (from 18 October 2026), built from ATAK's source; whether ATAK shows them as delivered still needs a device test.
 - [ ] **Which undocumented protocol details are stable?** The contact record and advert layouts come from firmware source, not the published page, and may change between firmware versions.
 - [ ] **Should the phone's position be shared to the mesh?** It would mean writing the radio's advertised location, which conflicts with the rule of never changing radio settings.
 - [x] **Who keeps the release signing key?** Bud creates and holds it (decided 14 October 2026), with a password-manager copy and an offline copy. GitHub keeps it as secrets in a `release` environment that a maintainer must approve each run to use. Every release must be signed with this key, or installed copies cannot update. See [RELEASING.md](RELEASING.md).

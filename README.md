@@ -14,7 +14,7 @@ What works:
 - A Bluetooth link to a MeshCore companion radio, with every step queued and time-limited, up to 3 connection tries, PIN pairing, and automatic reconnection to the radio chosen last time.
 - Every node that shares a position as an ATAK marker: companions as team members in a team colour you choose, repeaters and room servers as installations (optionally with an icon from an ATAK icon set), sensors as sensors. Filters by node type and by how recently a node was heard.
 - Every channel on the radio as an ATAK contact, two-way: channel text arrives as messages from that contact, and a message you send to it goes out on that channel.
-- Direct messages with companion nodes, both ways, through each node's ATAK contact, with acknowledgement and up to 3 tries.
+- Direct messages with companion nodes, both ways, through each node's ATAK contact, with acknowledgement and up to 3 tries; an acknowledged message shows as delivered in ATAK.
 - Replies on a channel in MeshCore's `@[Name]` form, typed as `@` and the start of a name, or `@@` for whoever spoke last.
 - Never writes to the radio's settings, channels, contacts or clock.
 
