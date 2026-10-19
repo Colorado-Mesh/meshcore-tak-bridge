@@ -38,6 +38,9 @@ class RadioSession(
     /** Returns the id the listener's direct-message result will carry, or null when the radio cannot take it now. */
     fun sendDirectText(publicKeyHex: String, text: String): Long? = client.sendDirectText(publicKeyHex, text)
 
+    /** Ask these companions, by public key, for their position about every [intervalMs]; empty stops. */
+    fun setTracking(publicKeys: Set<String>, intervalMs: Long) = client.setTracking(publicKeys, intervalMs)
+
     override fun onLog(message: String) = BridgeStatus.log("Radio: $message")
 
     override fun onReady(packetSize: Int) {

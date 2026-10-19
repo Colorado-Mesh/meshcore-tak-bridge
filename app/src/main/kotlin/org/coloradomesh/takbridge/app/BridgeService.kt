@@ -31,11 +31,15 @@ import org.coloradomesh.takbridge.protocol.DirectOutcome
 import org.coloradomesh.takbridge.protocol.LowBatteryWatch
 import org.coloradomesh.takbridge.protocol.RadioBattery
 import org.coloradomesh.takbridge.protocol.SelfInfo
+import org.coloradomesh.takbridge.protocol.TelemetryOutcome
 import org.coloradomesh.takbridge.takserver.ApiServer
 import org.coloradomesh.takbridge.takserver.TakServer
 import org.coloradomesh.takbridge.takserver.TakServerListener
 import java.io.IOException
 import java.time.Instant
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
@@ -101,6 +105,12 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
     @Volatile
     private var loggedBatteryPercent: Int? = null
 
+    /** How tracking each node is going, by public key, as shown on the screen. */
+    private val trackState = ConcurrentHashMap<String, String>()
+
+    /** The kind of the last outcome logged for each tracked node, so only changes are logged. */
+    private val trackLogged = ConcurrentHashMap<String, String>()
+
     /** What the status notification says now; main thread only. */
     private var notificationText = ""
 
@@ -123,6 +133,11 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
                 chooseRadio(it, intent.getStringExtra(EXTRA_NAME) ?: "radio")
             }
             ACTION_DISCONNECT_RADIO -> forgetRadio()
+            ACTION_RELOAD_TRACKING -> {
+                applyTracking()
+                // A node no longer tracked may now be one the filters leave off the map.
+                worker.execute { sendMarkers() }
+            }
             ACTION_RELOAD_STYLE -> {
                 BridgeStatus.log("Map settings applied; ${mesh.positionedCount} nodes shown")
                 worker.execute { sendMarkers() }
@@ -144,6 +159,70 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
             ?.mapNotNull { it.toIntOrNull() }?.toSet() ?: MeshPicture.ALL_TYPES
         val hours = prefs.getInt(PREF_MAX_AGE_HOURS, DEFAULT_MAX_AGE_HOURS)
         mesh.maxAgeSeconds = if (hours > 0) hours * 3600L else null
+        mesh.tracked = trackedKeys()
+    }
+
+    private fun trackedKeys(): Set<String> = prefs().getStringSet(PREF_TRACKED, null)?.toSet() ?: emptySet()
+
+    /**
+     * Tell the radio which companions to ask for their position. Only while ATAK is connected:
+     * each request uses airtime on a shared mesh, and nobody sees the answers without ATAK.
+     */
+    private fun applyTracking() {
+        val keys = trackedKeys()
+        mesh.tracked = keys
+        trackState.keys.retainAll(keys)
+        trackLogged.keys.retainAll(keys)
+        val active = server?.hasClient == true
+        val minutes = prefs().getInt(PREF_TRACK_MINUTES, DEFAULT_TRACK_MINUTES)
+        radio?.setTracking(if (active) keys else emptySet(), minutes * 60_000L)
+        showTracking()
+    }
+
+    /** The tracking lines on the screen: each tracked node and how it is going. */
+    private fun showTracking() {
+        val keys = trackedKeys()
+        val lines = if (keys.isEmpty()) {
+            emptyList()
+        } else {
+            val paused = if (server?.hasClient == true) emptyList() else listOf("Paused until ATAK connects")
+            paused + keys.map { key -> "${trackedName(key)}: ${trackState[key] ?: "not asked yet"}" }.sorted()
+        }
+        BridgeStatus.update { it.copy(tracking = lines) }
+    }
+
+    /** A different radio, or none: its companions and the answers heard through it no longer apply. */
+    private fun forgetTrackingProgress() {
+        trackState.clear()
+        trackLogged.clear()
+        BridgeStatus.update { it.copy(trackable = emptyList()) }
+        showTracking()
+    }
+
+    private fun trackedName(key: String) = mesh.contactByKey(key)?.let { mesh.displayName(it) } ?: "node ${key.take(8)}"
+
+    /** How a position request ended: move the marker, and say how it went. */
+    override fun onTelemetry(publicKeyHex: String, outcome: TelemetryOutcome) {
+        val at = LocalTime.now().format(CLOCK)
+        val name = trackedName(publicKeyHex)
+        val (kind, state) = when (outcome) {
+            is TelemetryOutcome.Answered -> {
+                val position = outcome.telemetry.position
+                if (position == null) {
+                    "no position" to "answered at $at but shares no position (GPS off, or location not allowed)"
+                } else {
+                    mesh.putFix(publicKeyHex, position, Instant.now().epochSecond)
+                    mesh.contactByKey(publicKeyHex)?.let { contact -> server?.let { sendMeshMarkers(it, only = contact) } }
+                    val where = String.format(Locale.ROOT, "%.4f, %.4f", position.latitude, position.longitude)
+                    "position" to "at $where ($at)"
+                }
+            }
+            TelemetryOutcome.NoAnswer -> "no answer" to "no answer at $at (out of range, or location sharing not allowed)"
+            TelemetryOutcome.NotSent -> "not sent" to "the radio did not send the request at $at"
+        }
+        trackState[publicKeyHex] = state
+        if (trackLogged.put(publicKeyHex, kind) != kind) BridgeStatus.log("Tracking $name: $state")
+        showTracking()
     }
 
     /** The user picked a radio: remember it, and keep it connected until told otherwise. */
@@ -159,6 +238,7 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
             mesh.clear()
             replies.clear()
             synchronized(lowBattery) { lowBattery.reset() }
+            forgetTrackingProgress()
         }
         wanted = address
         wantedName = name
@@ -178,6 +258,7 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         mesh.clear()
         replies.clear()
         synchronized(lowBattery) { lowBattery.reset() }
+        forgetTrackingProgress()
         BridgeStatus.update { it.copy(radio = "No radio", radioBusy = false) }
         clearBattery()
     }
@@ -304,7 +385,10 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
     }
 
     override fun onContact(contact: Contact) {
+        val new = mesh.contactByKey(contact.publicKeyHex) == null
         mesh.putContact(contact)
+        // A companion heard after start-up can be chosen for tracking too.
+        if (radioUp && new && contact.type == Contact.TYPE_COMPANION) BridgeStatus.update { it.copy(trackable = mesh.companions()) }
         server?.let { active -> sendMeshMarkers(active, only = contact) }
     }
 
@@ -315,8 +399,11 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         val names = channels.joinToString { "${it.index}: ${it.name}" }.ifEmpty { "none" }
         BridgeStatus.log("Radio: ${mesh.contactCount} contacts, ${mesh.positionedCount} with a position")
         BridgeStatus.log("Radio: ${channels.size} channels ($names)")
-        BridgeStatus.update { it.copy(radio = "${it.radio}\n${channels.size} channels, ${mesh.positionedCount} nodes on the map") }
+        BridgeStatus.update {
+            it.copy(radio = "${it.radio}\n${channels.size} channels, ${mesh.positionedCount} nodes on the map", trackable = mesh.companions())
+        }
         sendPicture()
+        applyTracking()
     }
 
     override fun onChannelMessage(message: ChannelMessage) {
@@ -593,6 +680,7 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         BridgeStatus.update { it.copy(clientConnected = true) }
         identity = null
         onMap.clear()
+        applyTracking()
         if (mesh.hasRadio) {
             BridgeStatus.log("ATAK connected; sending ${mesh.positionedCount} mesh nodes and ${mesh.channelCount} channels")
             sendPicture()
@@ -616,6 +704,7 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         BridgeStatus.update { it.copy(clientConnected = false) }
         identity = null
         BridgeStatus.log("ATAK disconnected")
+        applyTracking()
     }
 
     override fun onChat(chat: InboundChat) {
@@ -713,6 +802,16 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         const val PREF_COMPANION_TEAM = "companion_team"
         const val PREF_SHOWN_TYPES = "shown_types"
         const val PREF_MAX_AGE_HOURS = "max_age_hours"
+        const val ACTION_RELOAD_TRACKING = "org.coloradomesh.takbridge.RELOAD_TRACKING"
+        const val PREF_TRACKED = "tracked_nodes"
+        const val PREF_TRACK_MINUTES = "track_minutes"
+
+        /** How often each tracked node is asked for its position, unless the user chooses otherwise. */
+        const val DEFAULT_TRACK_MINUTES = 5
+
+        /** The most companions that can be tracked at once, to keep the airtime used reasonable. */
+        const val MAX_TRACKED = 10
+        private val CLOCK: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
         /** Nodes silent for a week are left off the map unless the user chooses otherwise. */
         const val DEFAULT_MAX_AGE_HOURS = 7 * 24

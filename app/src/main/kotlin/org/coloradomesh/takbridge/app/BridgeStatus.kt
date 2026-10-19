@@ -15,6 +15,10 @@ data class BridgeState(
     val radioBusy: Boolean = false,
     /** The linked radio's last battery reading in millivolts; null when there is none. */
     val batteryMillivolts: Int? = null,
+    /** Companions the radio knows, as public key and name, for choosing which to track. */
+    val trackable: List<Pair<String, String>> = emptyList(),
+    /** One line per tracked node on how its tracking is going, for the status screen. */
+    val tracking: List<String> = emptyList(),
     val log: List<String> = emptyList(),
 )
 

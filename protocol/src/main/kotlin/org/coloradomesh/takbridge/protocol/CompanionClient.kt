@@ -14,6 +14,21 @@ enum class DirectOutcome {
     REFUSED,
 }
 
+/** How a request for a tracked node's position ended. */
+sealed interface TelemetryOutcome {
+    /** The node answered; its position is null when it shares none (no GPS on, or not allowed). */
+    data class Answered(val telemetry: Telemetry) : TelemetryOutcome
+
+    /**
+     * Nothing came back in time. The node may be out of range, or not allow this radio to ask:
+     * MeshCore sends no answer at all to a request it does not allow.
+     */
+    data object NoAnswer : TelemetryOutcome
+
+    /** The radio would not send the request, for example because it has no such contact. */
+    data object NotSent : TelemetryOutcome
+}
+
 /**
  * Runs the conversation with a companion radio over an open link.
  *
@@ -22,6 +37,10 @@ enum class DirectOutcome {
  * and every channel slot it reports, then collects queued messages; from then on it reacts to
  * the radio's own notices of new messages and adverts. It reads the battery once start-up is done
  * and every [BATTERY_INTERVAL_MS] after that.
+ *
+ * Nodes given to [setTracking] are asked for their position in turn, each about once per interval.
+ * The radio keeps track of one such request at a time, so the next is sent only once the last has
+ * been answered or given up on.
  *
  * A direct message is sent, then waited on for the recipient's acknowledgement, and sent again
  * up to [MAX_DIRECT_ATTEMPTS] times in all if none comes, as the MeshCore apps do.
@@ -33,7 +52,7 @@ enum class DirectOutcome {
  *   firmware marks its own flooded packets as seen, so this is not expected, but if it happens
  *   the log says so.
  *
- * It only reads from the radio and sends text. It never changes the radio's settings,
+ * It only reads from the radio, sends text and asks tracked nodes for their position. It never changes the radio's settings,
  * channels, contacts, paths or clock.
  *
  * Thread-safe. Listener calls are made while the client is locked, so they must not block.
@@ -67,6 +86,9 @@ class CompanionClient(
 
         /** The radio's battery voltage, at start-up and then every [BATTERY_INTERVAL_MS]; zero if it cannot measure it. */
         fun onBattery(millivolts: Int) {}
+
+        /** How a position request to the tracked node [publicKeyHex] ended. */
+        fun onTelemetry(publicKeyHex: String, outcome: TelemetryOutcome) {}
     }
 
     private sealed interface Job {
@@ -78,7 +100,11 @@ class CompanionClient(
         data class SendText(val index: Int, val text: String) : Job
         data class SendDirect(val id: Long) : Job
         data object Battery : Job
+        data class Telemetry(val publicKeyHex: String) : Job
     }
+
+    /** A position request the radio has sent, waiting for the node's answer until [deadline]. */
+    private class AwaitingTelemetry(val publicKeyHex: String, val deadline: Long)
 
     /** A direct message from the first try until it is acknowledged or given up on. */
     private class Outbound(val publicKeyHex: String, val text: String, val timestamp: Long) {
@@ -105,6 +131,11 @@ class CompanionClient(
     /** When to read the battery next; firmware that refuses the request is not asked again. */
     private var nextBatteryAt = Long.MAX_VALUE
     private var batteryRefused = false
+
+    /** Nodes to ask for their position, by public key, and when each was last asked. */
+    private val tracked = LinkedHashMap<String, Long>()
+    private var trackingIntervalMs = DEFAULT_TRACKING_INTERVAL_MS
+    private var awaitingTelemetry: AwaitingTelemetry? = null
     private val outbound = LinkedHashMap<Long, Outbound>()
     private val sentOnChannels = RecentKeys(ECHO_MEMORY, ECHO_WINDOW_MS, clock)
     private val directsHeard = RecentKeys(ECHO_MEMORY, ECHO_WINDOW_MS, clock)
@@ -141,6 +172,19 @@ class CompanionClient(
     }
 
     /**
+     * Ask the nodes with these public keys (64 hex characters each) for their position, each about
+     * every [intervalMs]. An empty set stops asking. Nodes still tracked keep their place in turn.
+     */
+    @Synchronized
+    fun setTracking(publicKeys: Set<String>, intervalMs: Long) {
+        val keys = publicKeys.filter { it.length == 64 && it.all { c -> c in "0123456789abcdef" } }.toSet()
+        tracked.keys.retainAll(keys)
+        for (key in keys) tracked.putIfAbsent(key, NEVER)
+        trackingIntervalMs = intervalMs.coerceAtLeast(MIN_TRACKING_INTERVAL_MS)
+        queue.removeAll { it is Job.Telemetry && it.publicKeyHex !in tracked }
+    }
+
+    /**
      * Call about once a second. A command the radio never answers is given up on, and a direct
      * message whose acknowledgement is overdue is tried again or reported unconfirmed.
      */
@@ -166,6 +210,32 @@ class CompanionClient(
             }
         }
         if (ready && !batteryRefused && now >= nextBatteryAt) requestBattery()
+        awaitingTelemetry?.let {
+            if (now >= it.deadline) {
+                awaitingTelemetry = null
+                listener.onTelemetry(it.publicKeyHex, TelemetryOutcome.NoAnswer)
+            }
+        }
+        if (ready) askNextTracked(now)
+    }
+
+    /** Send the next due position request, unless one is already queued, under way or awaited. */
+    private fun askNextTracked(now: Long) {
+        if (awaitingTelemetry != null || current is Job.Telemetry || queue.any { it is Job.Telemetry }) return
+        val due = tracked.entries.filter { it.value == NEVER || now - it.value >= trackingIntervalMs }.minByOrNull { it.value } ?: return
+        due.setValue(now)
+        enqueue(Job.Telemetry(due.key))
+    }
+
+    /** A node's answer can arrive at any time; only the one awaited is reported. */
+    private fun receiveTelemetry(telemetry: Telemetry) {
+        val awaited = awaitingTelemetry
+        if (awaited == null || !awaited.publicKeyHex.startsWith(telemetry.senderPrefixHex)) {
+            listener.onLog("Telemetry from ${telemetry.senderPrefixHex} arrived late or unasked; ignored")
+            return
+        }
+        awaitingTelemetry = null
+        listener.onTelemetry(awaited.publicKeyHex, TelemetryOutcome.Answered(telemetry))
     }
 
     private fun requestBattery() {
@@ -180,6 +250,7 @@ class CompanionClient(
             CompanionFrame.MessagesWaiting -> if (ready) enqueueOnce(Job.Sync)
             CompanionFrame.AdvertHeard -> if (ready) enqueueOnce(Job.Contacts)
             is CompanionFrame.SendConfirmed -> confirm(frame)
+            is CompanionFrame.TelemetryReply -> receiveTelemetry(frame.telemetry)
             is CompanionFrame.ContactEntry -> {
                 listener.onContact(frame.contact)
                 if (!frame.pushed && current == Job.Contacts) extend()
@@ -279,6 +350,11 @@ class CompanionClient(
                 listener.onBattery(frame.millivolts)
                 finish(job)
             }
+            is Job.Telemetry -> if (frame is CompanionFrame.Sent) {
+                val wait = frame.timeoutMs.coerceIn(MIN_ACK_WAIT_MS, MAX_ACK_WAIT_MS) + ACK_MARGIN_MS
+                awaitingTelemetry = AwaitingTelemetry(job.publicKeyHex, clock() + wait)
+                finish(job)
+            }
         }
     }
 
@@ -310,6 +386,7 @@ class CompanionClient(
             is Job.SendDirect -> if (!answered) {
                 outbound.remove(job.id)?.let { listener.onDirectResult(job.id, it.publicKeyHex, it.text, DirectOutcome.REFUSED) }
             }
+            is Job.Telemetry -> if (!answered) listener.onTelemetry(job.publicKeyHex, TelemetryOutcome.NotSent)
             is Job.GetChannel -> {
                 slotsLeft--
                 if (slotsLeft == 0) {
@@ -359,6 +436,7 @@ class CompanionClient(
             CompanionFrames.sendDirectText(message.publicKeyHex, message.attempt, message.timestamp, message.text)
         }
         Job.Battery -> CompanionFrames.getBattery()
+        is Job.Telemetry -> CompanionFrames.telemetryRequest(job.publicKeyHex)
     }
 
     private fun describe(job: Job): String = when (job) {
@@ -370,6 +448,7 @@ class CompanionClient(
         is Job.SendText -> "a message for channel ${job.index}"
         is Job.SendDirect -> "a direct message"
         Job.Battery -> "the battery request"
+        is Job.Telemetry -> "a position request"
     }
 
     companion object {
@@ -378,6 +457,13 @@ class CompanionClient(
 
         /** How often the battery is read after the first time. */
         const val BATTERY_INTERVAL_MS = 5 * 60_000L
+
+        /** How often each tracked node is asked for its position, unless told otherwise, and the least allowed. */
+        const val DEFAULT_TRACKING_INTERVAL_MS = 5 * 60_000L
+        const val MIN_TRACKING_INTERVAL_MS = 60_000L
+
+        /** "Never asked", which puts a node first in turn. */
+        private const val NEVER = Long.MIN_VALUE
 
         private const val APP_NAME = "TAKBridge"
         private const val TIMEOUT_MS = 6_000L

@@ -88,6 +88,20 @@ data class DirectMessage(
     val timestamp: Long,
 )
 
+/** A position a node reported, from its GPS. */
+data class Position(val latitude: Double, val longitude: Double, val altitudeMeters: Double?)
+
+/**
+ * A node's answer to a telemetry request: its battery, and its position when it has a GPS that
+ * is on and it lets this radio see where it is.
+ */
+data class Telemetry(
+    /** The first 6 bytes of the node's public key as 12 lowercase hex characters. */
+    val senderPrefixHex: String,
+    val position: Position?,
+    val millivolts: Int?,
+)
+
 /** One frame received from the radio, as far as the bridge understands it. */
 sealed interface CompanionFrame {
     data class Self(val info: SelfInfo) : CompanionFrame
@@ -119,6 +133,9 @@ sealed interface CompanionFrame {
     /** A recipient acknowledged the direct message whose [Sent.ackCode] this is. */
     data class SendConfirmed(val ackCode: Long, val tripMs: Long) : CompanionFrame
 
+    /** A node answered a telemetry request. */
+    data class TelemetryReply(val telemetry: Telemetry) : CompanionFrame
+
     /** The radio's battery voltage. Zero on boards that cannot measure it. */
     data class Battery(val millivolts: Int) : CompanionFrame
 
@@ -142,7 +159,7 @@ sealed interface CompanionFrame {
  * The MeshCore companion protocol, as documented at docs.meshcore.io/companion_protocol.
  * Over Bluetooth each write and each notification carries exactly one frame.
  *
- * Only commands that read from the radio or send a message belong here. The bridge never
+ * Only commands that read from the radio, send a message, or ask a node for its telemetry belong here. The bridge never
  * changes a radio's configuration, so nothing in this file builds a command that would.
  */
 object CompanionFrames {
@@ -162,6 +179,7 @@ object CompanionFrames {
     private const val CMD_SYNC_NEXT_MESSAGE = 0x0A
     private const val CMD_GET_CHANNEL = 0x1F
     private const val CMD_GET_BATTERY = 0x14
+    private const val CMD_SEND_TELEMETRY_REQ = 0x27
     private const val RESP_CONTACTS_START = 0x02
     private const val RESP_CONTACT = 0x03
     private const val RESP_END_OF_CONTACTS = 0x04
@@ -178,6 +196,7 @@ object CompanionFrames {
     private const val PUSH_SEND_CONFIRMED = 0x82
     private const val PUSH_MSG_WAITING = 0x83
     private const val PUSH_NEW_ADVERT = 0x8A
+    private const val PUSH_TELEMETRY_RESPONSE = 0x8B
     private const val TEXT_TYPE_PLAIN = 0
 
     /** The key of MeshCore's default Public channel, from the firmware (base64 izOH6cXN6mrJ5e26oRXNcg==). */
@@ -219,6 +238,17 @@ object CompanionFrames {
 
     /** Asks for the battery voltage; the radio answers with [CompanionFrame.Battery]. */
     fun getBattery(): ByteArray = byteArrayOf(CMD_GET_BATTERY.toByte())
+
+    /**
+     * Asks the node whose public key is [publicKeyHex] (all 64 hex characters) for its telemetry.
+     * The radio answers with [CompanionFrame.Sent]; the node's answer, if any, arrives later as
+     * [CompanionFrame.TelemetryReply]. A node sends nothing back when it does not allow the request.
+     */
+    fun telemetryRequest(publicKeyHex: String): ByteArray {
+        require(publicKeyHex.length == 64 && publicKeyHex.all { it in "0123456789abcdef" }) { "need a whole public key in lowercase hex" }
+        val key = ByteArray(32) { publicKeyHex.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
+        return byteArrayOf(CMD_SEND_TELEMETRY_REQ.toByte(), 0, 0, 0) + key
+    }
 
     /** Collects one queued message; the radio answers with it or with [CompanionFrame.NoMoreMessages]. */
     fun syncNextMessage(): ByteArray = byteArrayOf(CMD_SYNC_NEXT_MESSAGE.toByte())
@@ -267,6 +297,13 @@ object CompanionFrames {
             RESP_BATTERY -> if (frame.size >= 3) CompanionFrame.Battery(uint16(frame, 1)) else null
             PUSH_MSG_WAITING -> CompanionFrame.MessagesWaiting
             PUSH_ADVERT -> CompanionFrame.AdvertHeard
+            // A reserved byte, the sender's key prefix, then the telemetry in CayenneLPP form.
+            PUSH_TELEMETRY_RESPONSE -> if (frame.size >= 2 + KEY_PREFIX_BYTES) {
+                val lpp = CayenneLpp.read(frame.copyOfRange(2 + KEY_PREFIX_BYTES, frame.size))
+                CompanionFrame.TelemetryReply(Telemetry(hex(frame, 2, KEY_PREFIX_BYTES), lpp.position, lpp.millivolts))
+            } else {
+                null
+            }
             else -> null
         } ?: CompanionFrame.Other(code, frame.size)
     }

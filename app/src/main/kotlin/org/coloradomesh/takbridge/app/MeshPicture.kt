@@ -8,6 +8,7 @@ import org.coloradomesh.takbridge.protocol.ChannelMessage
 import org.coloradomesh.takbridge.protocol.CompanionFrames
 import org.coloradomesh.takbridge.protocol.Contact
 import org.coloradomesh.takbridge.protocol.DirectMessage
+import org.coloradomesh.takbridge.protocol.Position
 import org.coloradomesh.takbridge.protocol.SelfInfo
 import java.time.Instant
 import java.time.ZoneOffset
@@ -27,6 +28,9 @@ import java.util.concurrent.ConcurrentHashMap
  * companions: a repeater or room server reads plain text from its admin as a command.
  * A companion with no position on the map still gets a contact, at 0, 0 like the channels,
  * once a direct message has passed between it and the ATAK user, so the conversation can go on.
+ *
+ * A tracked companion is placed where it last said it was in answer to a position request, when
+ * that is newer than its advert, and it shows whatever the filters say: it was chosen by name.
  */
 class MeshPicture {
     @Volatile
@@ -35,6 +39,15 @@ class MeshPicture {
     @Volatile
     private var rooms: Map<String, Channel> = emptyMap()
     private val contacts = ConcurrentHashMap<String, Contact>()
+
+    /** Where tracked nodes said they were, and when this phone heard it, by public key. */
+    private val fixes = ConcurrentHashMap<String, Fix>()
+
+    private data class Fix(val position: Position, val atSeconds: Long)
+
+    /** Public keys of the companions being tracked. */
+    @Volatile
+    var tracked: Set<String> = emptySet()
 
     /** Public keys of companions a direct message has passed with since the radio was chosen. */
     private val talkedTo: MutableSet<String> = ConcurrentHashMap.newKeySet()
@@ -65,6 +78,7 @@ class MeshPicture {
     /** Whether a node goes on the map under the current filters. [nowSeconds] is Unix time. */
     fun isShown(contact: Contact, nowSeconds: Long): Boolean {
         if (!contact.hasPosition) return false
+        if (contact.publicKeyHex in tracked && fixes.containsKey(contact.publicKeyHex)) return true
         if (contact.type in ALL_TYPES && contact.type !in shownTypes) return false
         val limit = maxAgeSeconds ?: return true
         // A sender's clock can be wrong; an advert dated in the future counts as fresh.
@@ -91,6 +105,27 @@ class MeshPicture {
         contacts[contact.publicKeyHex] = contact
     }
 
+    /** A tracked node reported [position], heard at [atSeconds] by this phone's clock. */
+    fun putFix(publicKeyHex: String, position: Position, atSeconds: Long) {
+        fixes[publicKeyHex] = Fix(position, atSeconds)
+    }
+
+    /** Companions, for choosing which to track: public key and name, by name. */
+    fun companions(): List<Pair<String, String>> =
+        contacts.values.filter { it.type == Contact.TYPE_COMPANION }
+            .map { it.publicKeyHex to displayName(it) }
+            .sortedBy { it.second.lowercase() }
+
+    /**
+     * The contact as the map shows it: at its reported position when that is newer than its
+     * advert. Adverts are dated by the sender's clock and fixes by this phone's, which is close
+     * enough to tell which came later.
+     */
+    private fun placed(contact: Contact): Contact {
+        val fix = fixes[contact.publicKeyHex]?.takeIf { it.atSeconds >= contact.lastAdvert } ?: return contact
+        return contact.copy(latitude = fix.position.latitude, longitude = fix.position.longitude, lastAdvert = fix.atSeconds)
+    }
+
     /** Channels that share a name get their slot number added so each has its own room. */
     fun setChannels(channels: List<Channel>) {
         val repeated = channels.groupingBy { it.name }.eachCount().filterValues { it > 1 }.keys
@@ -102,6 +137,7 @@ class MeshPicture {
         rooms = emptyMap()
         contacts.clear()
         talkedTo.clear()
+        fixes.clear()
     }
 
     /** The companion a chat event from ATAK is for, going by the contact uid it was addressed to. */
@@ -122,7 +158,7 @@ class MeshPicture {
     fun noteTalkedTo(contact: Contact, nowSeconds: Long): Boolean {
         if (contact.type != Contact.TYPE_COMPANION) return false
         val added = talkedTo.add(contact.publicKeyHex)
-        return added && !isShown(contact, nowSeconds)
+        return added && !isShown(placed(contact), nowSeconds)
     }
 
     /** A direct message has no prefix added, so it can use every byte the protocol allows. */
@@ -202,7 +238,9 @@ class MeshPicture {
                 ),
             )
         }
-        for (contact in contacts.values) {
+        for (known in contacts.values) {
+            val contact = placed(known)
+            val fix = fixes[contact.publicKeyHex]?.takeIf { it.atSeconds == contact.lastAdvert }
             val companion = contact.type == Contact.TYPE_COMPANION
             if (!isShown(contact, nowSeconds)) {
                 // Off the map, but in a conversation with the ATAK user: keep it reachable.
@@ -242,7 +280,11 @@ class MeshPicture {
                     },
                     team = if (companion) companionTeam else null,
                     role = if (companion) "Team Member" else null,
-                    remarks = "MeshCore ${kind(contact.type)}, last advert ${TIME.format(Instant.ofEpochSecond(contact.lastAdvert))} UTC",
+                    remarks = if (fix != null) {
+                        "MeshCore ${kind(contact.type)}, tracked: position reported ${TIME.format(Instant.ofEpochSecond(fix.atSeconds))} UTC"
+                    } else {
+                        "MeshCore ${kind(contact.type)}, last advert ${TIME.format(Instant.ofEpochSecond(contact.lastAdvert))} UTC"
+                    },
                 ),
             )
         }
@@ -253,7 +295,7 @@ class MeshPicture {
     val positionedCount: Int
         get() {
             val now = System.currentTimeMillis() / 1000
-            return contacts.values.count { isShown(it, now) }
+            return contacts.values.count { isShown(placed(it), now) }
         }
 
     val contactCount: Int

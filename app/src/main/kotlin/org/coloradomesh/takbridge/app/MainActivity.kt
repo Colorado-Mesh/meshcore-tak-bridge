@@ -2,6 +2,7 @@ package org.coloradomesh.takbridge.app
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -28,6 +29,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import org.coloradomesh.takbridge.R
 import org.coloradomesh.takbridge.app.ble.FoundRadio
 import org.coloradomesh.takbridge.app.ble.RadioScanner
@@ -47,6 +49,8 @@ class MainActivity : Activity() {
     private lateinit var radioView: TextView
     private lateinit var radioButton: Button
     private lateinit var radioList: LinearLayout
+    private lateinit var trackButton: Button
+    private lateinit var trackingView: TextView
     private lateinit var scanner: RadioScanner
     private val found = LinkedHashMap<String, FoundRadio>()
 
@@ -95,6 +99,7 @@ class MainActivity : Activity() {
         column.addView(radioButton, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
         column.addView(radioList, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         column.addView(filterSection(pad), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        column.addView(trackingSection(pad), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         column.addView(iconSection(pad), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         column.addView(setupView, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         column.addView(aboutSection(pad), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
@@ -129,6 +134,10 @@ class MainActivity : Activity() {
         }
         toggleButton.text = if (state.running) "Stop bridge" else "Start bridge"
         logView.text = state.log.asReversed().joinToString("\n")
+        val tracked = getSharedPreferences(BridgeService.PREFS, MODE_PRIVATE).getStringSet(BridgeService.PREF_TRACKED, null).orEmpty()
+        trackButton.text = if (tracked.isEmpty()) "Choose companions to track" else "Choose companions to track (${tracked.size})"
+        trackingView.text = state.tracking.joinToString("\n")
+        trackingView.visibility = if (state.tracking.isEmpty()) View.GONE else View.VISIBLE
         radioView.text = state.batteryMillivolts?.let { "${state.radio}\nBattery: ${RadioBattery.describe(it)}" } ?: state.radio
         // Once the bridge is connecting to a radio, for example the one it reconnects to on
         // start, a scan list left on screen would only invite a second tap that restarts it.
@@ -338,6 +347,92 @@ class MainActivity : Activity() {
         }
         section.addView(labelledRow("Hide nodes not heard for", spinner, dp(4)))
         return section
+    }
+
+    /**
+     * Tracking: which companions to ask for their position, and how often. Each must have agreed:
+     * a node only answers when its owner allows location telemetry.
+     */
+    private fun trackingSection(pad: Int): LinearLayout {
+        val prefs = getSharedPreferences(BridgeService.PREFS, MODE_PRIVATE)
+        val section = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, pad, 0, 0)
+        }
+        section.addView(TextView(this).apply { text = "Tracking" })
+        section.addView(
+            TextView(this).apply {
+                textSize = 12f
+                setPadding(0, dp(4), 0, dp(4))
+                text = TRACKING_TEXT
+            },
+        )
+        trackButton = Button(this).apply { setOnClickListener { chooseTracked() } }
+        section.addView(trackButton, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+
+        val minutes = TRACK_MINUTE_CHOICES
+        val current = prefs.getInt(BridgeService.PREF_TRACK_MINUTES, BridgeService.DEFAULT_TRACK_MINUTES)
+        val spinner = Spinner(this).apply {
+            adapter = choices(minutes.map { "every $it min" })
+            setSelection(minutes.indexOf(current).coerceAtLeast(0))
+            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                    val chosen = minutes[position]
+                    if (chosen == prefs.getInt(BridgeService.PREF_TRACK_MINUTES, BridgeService.DEFAULT_TRACK_MINUTES)) return
+                    prefs.edit().putInt(BridgeService.PREF_TRACK_MINUTES, chosen).apply()
+                    applyTrackingSettings()
+                }
+
+                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+            }
+        }
+        section.addView(labelledRow("Ask each one for its position", spinner, dp(4)))
+        trackingView = TextView(this).apply {
+            setPadding(0, dp(4), 0, 0)
+            visibility = View.GONE
+        }
+        section.addView(trackingView, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        return section
+    }
+
+    /** A list of the radio's companions to tick, up to [BridgeService.MAX_TRACKED]. */
+    private fun chooseTracked() {
+        val companions = BridgeStatus.current().trackable
+        if (companions.isEmpty()) {
+            Toast.makeText(this, "Connect a radio first: its companions are the ones that can be tracked.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val prefs = getSharedPreferences(BridgeService.PREFS, MODE_PRIVATE)
+        val tracked = prefs.getStringSet(BridgeService.PREF_TRACKED, null).orEmpty()
+        // Those already tracked first, so they are easy to find in a long list.
+        val list = companions.sortedBy { it.first !in tracked }
+        val checked = BooleanArray(list.size) { list[it].first in tracked }
+        AlertDialog.Builder(this)
+            .setTitle("Track up to ${BridgeService.MAX_TRACKED} companions")
+            .setMultiChoiceItems(list.map { it.second }.toTypedArray(), checked) { dialog, which, isChecked ->
+                if (isChecked && checked.count { it } >= BridgeService.MAX_TRACKED) {
+                    (dialog as AlertDialog).listView.setItemChecked(which, false)
+                    Toast.makeText(this, "At most ${BridgeService.MAX_TRACKED} at once, to spare the mesh's airtime.", Toast.LENGTH_SHORT).show()
+                } else {
+                    checked[which] = isChecked
+                }
+            }
+            .setPositiveButton("Save") { _, _ ->
+                val chosen = list.indices.filter { checked[it] }.map { list[it].first }.toSet()
+                prefs.edit().putStringSet(BridgeService.PREF_TRACKED, chosen).apply()
+                BridgeStatus.log(if (chosen.isEmpty()) "Tracking: no companions chosen" else "Tracking: ${chosen.size} companions chosen")
+                applyTrackingSettings()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    /** Tells a running bridge to re-read the tracking settings. */
+    private fun applyTrackingSettings() {
+        if (BridgeStatus.current().running) {
+            startForegroundService(serviceIntent().setAction(BridgeService.ACTION_RELOAD_TRACKING))
+        }
+        render(BridgeStatus.current())
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
@@ -612,6 +707,14 @@ class MainActivity : Activity() {
             Contact.TYPE_SENSOR to "Sensors",
         )
 
+        /** How often each tracked companion can be asked for its position, in minutes. */
+        val TRACK_MINUTE_CHOICES = listOf(2, 5, 10, 15, 30)
+
+        val TRACKING_TEXT = "Ask chosen companions where they are while ATAK is connected; their markers move " +
+            "as they answer, and ATAK can draw their tracks. Each needs a GPS that is on, and its owner must allow " +
+            "location telemetry for everyone or for your radio. Every request uses airtime, so choose only the " +
+            "people you are working with."
+
         /** Hours, and how each choice reads; 0 means never hide. */
         val AGE_CHOICES = listOf(
             24 to "1 day",
@@ -635,6 +738,7 @@ class MainActivity : Activity() {
             "4. To message someone directly, chat with the contact of their companion node.",
             "5. To reply to someone on a channel, start with @ and the first part of their name (@silver), " +
                 "or @@ for whoever spoke last.",
+            "6. To follow people who have agreed to share their location, choose them under Tracking.",
             "The bridge never changes the radio's settings, channels, contacts or clock.",
         ).joinToString("\n")
     }

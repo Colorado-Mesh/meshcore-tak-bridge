@@ -15,6 +15,7 @@ class CompanionClientTest {
     private val directResults = ArrayList<Pair<String, DirectOutcome>>()
     private var channels: List<Channel>? = null
     private val batteries = ArrayList<Int>()
+    private val positions = ArrayList<Pair<String, TelemetryOutcome>>()
     private var now = 1_800_000_000_000L
 
     private val client = CompanionClient(
@@ -30,6 +31,7 @@ class CompanionClientTest {
                 directResults.add(text to outcome)
             }
             override fun onBattery(millivolts: Int) { batteries.add(millivolts) }
+            override fun onTelemetry(publicKeyHex: String, outcome: TelemetryOutcome) { positions.add(publicKeyHex.take(2) to outcome) }
         },
         clock = { now },
     )
@@ -55,6 +57,11 @@ class CompanionClientTest {
     /** Walks the client through start-up with two channel slots and one contact. */
     private fun startUp() {
         client.start()
+        startUpAfterGreeting()
+    }
+
+    /** The rest of start-up, once the opening greeting has been sent. */
+    private fun startUpAfterGreeting() {
         assertEquals(1, lastSent()[0].toInt())
         client.onFrame(selfInfo())
         assertArrayEquals(byteArrayOf(0x16, 3), lastSent())
@@ -197,6 +204,93 @@ class CompanionClientTest {
         assertEquals(3, lastSent()[0].toInt())
         client.onFrame(byteArrayOf(0))
         assertArrayEquals(byteArrayOf(0x14), lastSent())
+    }
+
+    private val tracker1 = "aa".repeat(32)
+    private val tracker2 = "bb".repeat(32)
+
+    private fun telemetryFrom(prefix: Byte, withGps: Boolean = true): ByteArray {
+        val gps = byteArrayOf(1, 136.toByte(), 0x06, 0x1B, 0x16, 0xF0.toByte(), 0x0F, 0xDF.toByte(), 0x02, 0x86.toByte(), 0x95.toByte())
+        return byteArrayOf(0x8B.toByte(), 0) + ByteArray(6) { prefix } + byteArrayOf(1, 116, 0x01, 0x87.toByte()) + if (withGps) gps else ByteArray(0)
+    }
+
+    private fun isTelemetryRequestFor(key: String, frame: ByteArray) =
+        frame.size == 36 && frame[0].toInt() == 0x27 && frame.copyOfRange(4, 36).contentEquals(CompanionFrames.telemetryRequest(key).copyOfRange(4, 36))
+
+    @Test
+    fun trackedNodesAreAskedInTurnOneAtATime() {
+        startUp()
+        client.setTracking(linkedSetOf(tracker1, tracker2), 300_000)
+        client.tick()
+        assertTrue(isTelemetryRequestFor(tracker1, lastSent()))
+        client.onFrame(sentFrame(ack = 77, timeoutMs = 4_000))
+        val before = sent.size
+        client.tick()
+        assertEquals("the next waits for the answer", before, sent.size)
+        client.onFrame(telemetryFrom(0xAA.toByte()))
+        val answer = positions.single().second as TelemetryOutcome.Answered
+        assertEquals(40.015, answer.telemetry.position!!.latitude, 1e-4)
+        client.tick()
+        assertTrue(isTelemetryRequestFor(tracker2, lastSent()))
+    }
+
+    @Test
+    fun aNodeThatStaysSilentIsReportedAndTheTurnMovesOn() {
+        startUp()
+        client.setTracking(linkedSetOf(tracker1, tracker2), 300_000)
+        client.tick()
+        client.onFrame(sentFrame(ack = 77, timeoutMs = 4_000))
+        now += 4_000 + 2_000
+        client.tick()
+        assertEquals(listOf("aa" to TelemetryOutcome.NoAnswer), positions)
+        assertTrue(isTelemetryRequestFor(tracker2, lastSent()))
+    }
+
+    @Test
+    fun eachNodeIsAskedAgainOnlyAfterTheInterval() {
+        startUp()
+        client.setTracking(setOf(tracker1), 120_000)
+        client.tick()
+        client.onFrame(sentFrame(ack = 77))
+        client.onFrame(telemetryFrom(0xAA.toByte(), withGps = false))
+        assertEquals(null, (positions.single().second as TelemetryOutcome.Answered).telemetry.position)
+        val before = sent.size
+        now += 119_000
+        client.tick()
+        assertEquals(before, sent.size)
+        now += 1_000
+        client.tick()
+        assertTrue(isTelemetryRequestFor(tracker1, lastSent()))
+    }
+
+    @Test
+    fun aRequestTheRadioRefusesIsReportedAsNotSent() {
+        startUp()
+        client.setTracking(setOf(tracker1), 300_000)
+        client.tick()
+        client.onFrame(byteArrayOf(1, 2))
+        assertEquals(listOf("aa" to TelemetryOutcome.NotSent), positions)
+    }
+
+    @Test
+    fun anUnaskedOrLateAnswerIsIgnored() {
+        startUp()
+        client.onFrame(telemetryFrom(0xCC.toByte()))
+        assertTrue(positions.isEmpty())
+        assertEquals(1, log.size)
+    }
+
+    @Test
+    fun trackingWaitsForStartUpAndStopsWhenCleared() {
+        client.setTracking(setOf(tracker1), 300_000)
+        client.start()
+        client.tick()
+        assertEquals(1, sent.size)
+        startUpAfterGreeting()
+        client.setTracking(emptySet(), 300_000)
+        val before = sent.size
+        client.tick()
+        assertEquals(before, sent.size)
     }
 
     @Test

@@ -54,6 +54,11 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
   - A radio that reports 0 V cannot measure its battery: the screen says so and no alert is raised. Firmware that refuses the request is not asked again.
   - Nothing new appears in ATAK itself (decided 2026-10-19): the radio is not a marker, and a note in every channel's chat would mark them all unread.
   - The log notes the battery at connect and when it has moved 5 points.
+- **Tracking** (built 2026-10-19, not yet seen on a device). For companions whose owners have agreed to share their location.
+  - Up to 10 companions are chosen on the bridge's screen. While ATAK is connected, each is asked in turn for its position with MeshCore's telemetry request, about every 5 minutes (2, 5, 10, 15 or 30 can be chosen), one request at a time.
+  - An answer with a position moves the node's marker in ATAK, which can draw its track. A tracked node shows even if the filters would hide it.
+  - The other radio needs a GPS that is on, and its owner must allow location telemetry for everyone or for this radio. It sends nothing back otherwise, so "no answer" may mean not allowed or out of range. The screen says which kind of answer each node gave.
+  - Decided 2026-10-19: ask only nodes chosen in advance, and leave drawing the track to ATAK. Trails built from adverts were set aside (companions advert only when their owner chooses), and sharing this phone's position was set aside too (it would mean writing the radio's advert location).
 - **No channel echoes** (checked 2026-10-12). A channel message sent from ATAK did not come back: the `Echo check:` log line never appeared. This matches the firmware, which marks its own flooded packets as seen. The guard stays in place: a received channel message matching one just sent from ATAK (`"<radio name>: <text>"`, same channel, within 15 minutes) is dropped and logged.
 - **Never writes to the radio's settings, channels, contacts or clock.**
 - **Colorado Mesh branding** (checked on a device, 13 October):

@@ -144,4 +144,56 @@ class CompanionFramesTest {
         assertEquals(CompanionFrame.Battery(4_200), CompanionFrames.parse(byteArrayOf(0x0C, 0x68, 0x10)))
         assertEquals(CompanionFrame.Other(0x0C, 2), CompanionFrames.parse(byteArrayOf(0x0C, 0x68)))
     }
+
+    private fun be24(value: Int) = byteArrayOf((value shr 16).toByte(), (value shr 8).toByte(), value.toByte())
+
+    /** Battery 3.91 V, a position near Boulder at 1655.25 m, and the MCU temperature, as MeshCore lays them out. */
+    private fun telemetryReply(lpp: ByteArray) = byteArrayOf(0x8B.toByte(), 0, 1, 2, 3, 4, 5, 6) + lpp
+
+    private val voltage = byteArrayOf(1, 116, 0x01, 0x87.toByte())
+    private val gps = byteArrayOf(1, 136.toByte()) + be24(400_150) + be24(-1_052_705) + be24(165_525)
+    private val temperature = byteArrayOf(1, 103, 0x00, 0xEB.toByte())
+
+    @Test
+    fun aTelemetryRequestNamesTheWholeKey() {
+        val key = "ab".repeat(32)
+        assertArrayEquals(byteArrayOf(0x27, 0, 0, 0) + ByteArray(32) { 0xAB.toByte() }, CompanionFrames.telemetryRequest(key))
+    }
+
+    @Test
+    fun readsAPositionAndBatteryFromTelemetry() {
+        val reply = CompanionFrames.parse(telemetryReply(voltage + gps + temperature)) as CompanionFrame.TelemetryReply
+        val t = reply.telemetry
+        assertEquals("010203040506", t.senderPrefixHex)
+        assertEquals(3_910, t.millivolts)
+        val p = t.position!!
+        assertEquals(40.015, p.latitude, 1e-9)
+        assertEquals(-105.2705, p.longitude, 1e-9)
+        assertEquals(1655.25, p.altitudeMeters!!, 1e-9)
+    }
+
+    @Test
+    fun telemetryWithoutAGpsHasNoPosition() {
+        val reply = CompanionFrames.parse(telemetryReply(voltage + temperature)) as CompanionFrame.TelemetryReply
+        assertNull(reply.telemetry.position)
+        assertEquals(3_910, reply.telemetry.millivolts)
+        val zero = byteArrayOf(1, 136.toByte()) + ByteArray(9)
+        assertNull((CompanionFrames.parse(telemetryReply(zero)) as CompanionFrame.TelemetryReply).telemetry.position)
+    }
+
+    @Test
+    fun readingStopsAtAnUnknownTypeOrACutOffValue() {
+        val unknown = byteArrayOf(2, 0xF0.toByte(), 9, 9, 9)
+        val first = CompanionFrames.parse(telemetryReply(voltage + unknown + gps)) as CompanionFrame.TelemetryReply
+        assertNull(first.telemetry.position)
+        val cut = CompanionFrames.parse(telemetryReply(voltage + gps.copyOf(8))) as CompanionFrame.TelemetryReply
+        assertNull(cut.telemetry.position)
+        assertEquals(3_910, cut.telemetry.millivolts)
+    }
+
+    @Test
+    fun anotherChannelsPositionIsNotTheNodes() {
+        val other = gps.copyOf().also { it[0] = 2 }
+        assertNull((CompanionFrames.parse(telemetryReply(other)) as CompanionFrame.TelemetryReply).telemetry.position)
+    }
 }
