@@ -195,7 +195,7 @@ Per-person reply contacts in ATAK were considered, since they would need no typi
 
 ## Radio battery
 
-The radio reports its battery only as a voltage, in answer to a request; it sends no low-battery notice of its own. The bridge reads it at connect and every 5 minutes, and turns it into an approximate percentage using the discharge curve of a typical lithium-ion cell (4.19 V full, 3.27 V empty). It is shown as "about", since the voltage reads high while charging and sags while transmitting. A reading of 0 means the board cannot measure its battery.
+The radio reports its battery only as a voltage, in answer to a request; it sends no low-battery notice of its own. The bridge reads it at connect and every 5 minutes, and turns it into an approximate percentage using the discharge curve of a typical lithium-ion cell (4.19 V full, 3.27 V empty). It is shown as "about", since the voltage reads high while charging and sags while transmitting. It reads lower than the MeshCore app near empty, since that app scales evenly from 3.0 V to 4.2 V (see "Open questions and risks"). A reading of 0 means the board cannot measure its battery.
 
 The reading appears on the bridge's screen and in its notification. As it falls to 20% and to 10%, a heads-up alert appears over ATAK; each level alerts once, and again only after the battery has climbed 5 points above it.
 
@@ -301,13 +301,13 @@ Settled by testing on devices:
 - [x] **Does choosing a radio connect on the first tap?** Yes, on build #43 (13 October 2026), after the scan list stopped redrawing under the user's finger. See "Choosing a radio" above.
 - [x] **What is the application ID?** `org.coloradomesh.takbridge`, from the Colorado Mesh organisation's own domain, decided on 13 October 2026. It replaced `io.github.robertmtalbot.takbridge` before the first signed release, and the Kotlin packages use the same name. It must not change again, because Android treats a new ID as a different app.
 - [x] **Does a sent channel message ever come back, so that it shows twice in ATAK?** No. The firmware source says not (see "Echoes"), and the bridge's echo log never fired in testing on 12 October 2026. The guard stays as a safety net.
+- [x] **Do ATAK's delivery receipts work through this server?** Yes, checked on 19 October 2026: ATAK puts a check mark beside the time of the latest message sent in that conversation once the mesh acknowledges it.
+- [x] **Does the battery estimate match what MeshCore's own apps show?** Not exactly, by design. At 3.88 V the bridge showed 69% and the MeshCore app 73% (19 October 2026); the MeshCore app appears to scale evenly from 3.0 V to 4.2 V. The bridge keeps the lithium curve, which reads lower near empty (about 20% against 42% at 3.5 V) and so gives its low-battery alerts in time.
+- [x] **Who keeps the release signing key?** Bud creates and holds it (decided 14 October 2026), with a password-manager copy and an offline copy. GitHub keeps it as secrets in a `release` environment that a maintainer must approve each run to use. Every release must be signed with this key, or installed copies cannot update. See [RELEASING.md](RELEASING.md).
 
 Still open:
 
-- [ ] **Do ATAK's delivery receipts work through this server?** The bridge sends `b-t-f-d` for acknowledged direct messages (from 18 October 2026), built from ATAK's source; whether ATAK shows them as delivered still needs a device test.
-- [ ] **Does the battery estimate match what MeshCore's own apps show?** The curve is a typical one for lithium-ion cells; a device test against the MeshCore app on the same radio will tell.
 - [ ] **Which undocumented protocol details are stable?** The contact record and advert layouts come from firmware source, not the published page, and may change between firmware versions.
 - [ ] **Should the phone's position be shared to the mesh?** It would mean writing the radio's advertised location, which conflicts with the rule of never changing radio settings.
-- [x] **Who keeps the release signing key?** Bud creates and holds it (decided 14 October 2026), with a password-manager copy and an offline copy. GitHub keeps it as secrets in a `release` environment that a maintainer must approve each run to use. Every release must be signed with this key, or installed copies cannot update. See [RELEASING.md](RELEASING.md).
 
 Decided on 11 October 2026: the name is MeshCore TAK Bridge, and the licence is GPL-3.0-or-later.
