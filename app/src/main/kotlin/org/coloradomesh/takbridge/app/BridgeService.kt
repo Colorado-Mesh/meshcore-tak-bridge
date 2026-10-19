@@ -80,6 +80,17 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
     /** Channel and direct messages received while ATAK was not there to take them. */
     private val backlog = ArrayList<Any>()
 
+    /**
+     * Direct messages from ATAK waiting for the mesh's acknowledgement, by the id the radio's
+     * result will carry, so ATAK can be told when one is delivered. Oldest dropped past a limit.
+     */
+    private val awaitingAck = object : LinkedHashMap<Long, PendingReceipt>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, PendingReceipt>?) = size > MAX_AWAITING_ACK
+    }
+
+    /** ATAK's id for a message it sent, and the node contact it went to. */
+    private data class PendingReceipt(val messageId: String, val nodeUid: String, val nodeCallsign: String)
+
     /** Who the connected ATAK says it is; learned from its first position report. */
     @Volatile
     private var identity: ClientIdentity? = null
@@ -308,11 +319,13 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
     }
 
     override fun onDirectResult(id: Long, publicKeyHex: String, text: String, outcome: DirectOutcome) {
+        val pending = synchronized(awaitingAck) { awaitingAck.remove(id) }
         val contact = mesh.contactByKey(publicKeyHex) ?: return
         val name = mesh.displayName(contact)
         val note = when (outcome) {
             DirectOutcome.DELIVERED -> {
                 BridgeStatus.log("ATAK to $name: delivered")
+                sendDeliveryReceipt(pending)
                 return
             }
             DirectOutcome.UNCONFIRMED -> {
@@ -327,6 +340,14 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         val atak = identity ?: return
         val now = Instant.now()
         server?.send(CotEvents.geoChat(mesh.directNotice(contact, atak, note, now), now))
+    }
+
+    /** Tell ATAK its message reached the node, so ATAK shows it as delivered. */
+    private fun sendDeliveryReceipt(pending: PendingReceipt?) {
+        if (pending == null) return
+        val atak = identity ?: return
+        val active = server ?: return
+        active.send(CotEvents.deliveryReceipt(pending.messageId, pending.nodeUid, pending.nodeCallsign, atak.uid, Instant.now()))
     }
 
     override fun onSendResult(channelIndex: Int, text: String, accepted: Boolean) {
@@ -560,9 +581,15 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         if (node != null) {
             BridgeStatus.log("ATAK to ${mesh.displayName(node)}, direct: ${chat.text}")
             mesh.noteTalkedTo(node, now.epochSecond)
-            if (session.sendDirectText(node.publicKeyHex, chat.text) == null) {
+            val id = session.sendDirectText(node.publicKeyHex, chat.text)
+            if (id == null) {
                 BridgeStatus.log("ATAK to ${mesh.displayName(node)}: the radio is busy or still starting; not sent")
                 noteToAtak(null, node, "Not sent: the radio is busy or still starting. Try again shortly.")
+            } else {
+                // ATAK names each message it sends; a receipt with that id marks it delivered.
+                chat.messageId?.let {
+                    synchronized(awaitingAck) { awaitingAck[id] = PendingReceipt(it, mesh.markerUid(node), mesh.displayName(node)) }
+                }
             }
             return
         }
@@ -615,6 +642,9 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         private const val NOTIFICATION_ID = 1
         private const val REFRESH_MINUTES = 5L
         private const val MAX_BACKLOG = 50
+
+        /** How many direct messages can wait for an acknowledgement at once. */
+        private const val MAX_AWAITING_ACK = 100
 
         /** How many matching names a "which one?" note lists. */
         private const val MAX_NAMES_SHOWN = 5

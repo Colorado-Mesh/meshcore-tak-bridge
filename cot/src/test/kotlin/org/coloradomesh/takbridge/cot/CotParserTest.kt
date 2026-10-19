@@ -53,6 +53,14 @@ class CotParserTest {
     }
 
     @Test
+    fun prefersTheMessageIdAttributeAsAtakDoes() {
+        val chat = geochat(chat = "chatroom=\"Mesh Ops\" id=\"Mesh Ops\" senderCallsign=\"VIPER\" messageId=\"abc-123\"")
+        assertEquals("abc-123", CotParser.parseGeoChat(chat)?.messageId)
+        val unusable = geochat(chat = "chatroom=\"Mesh Ops\" id=\"Mesh Ops\" messageId=\"bad id!\"")
+        assertEquals("6f9d2c1e-0a4b-4c58-9e11-2b7a5f0c9d3e", CotParser.parseGeoChat(unusable)?.messageId)
+    }
+
+    @Test
     fun takesTheSenderOnlyFromTheEventUid() {
         assertEquals("ANDROID-1", CotParser.parseGeoChat(geochat())?.senderUid)
         assertNull(CotParser.parseGeoChat(geochat(uid = "custom-uid-1")))

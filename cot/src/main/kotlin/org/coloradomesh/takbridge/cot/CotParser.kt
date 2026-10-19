@@ -85,7 +85,8 @@ object CotParser {
      * Parse a GeoChat (`b-t-f`) event into room, sender and text.
      *
      * ATAK's event uids are `GeoChat.<sender uid>.<room>.<message id>`, and the sender is read
-     * only from there. Delivery (`b-t-f-d`) and read (`b-t-f-r`) receipts are not messages.
+     * only from there. The message id is read from `__chat`'s `messageId`, as ATAK does, or else
+     * from the end of the uid. Delivery (`b-t-f-d`) and read (`b-t-f-r`) receipts are not messages.
      * Returns null for anything else and for a message without a room, sender uid or text.
      */
     fun parseGeoChat(xml: String): InboundChat? {
@@ -99,7 +100,9 @@ object CotParser {
         if (parts.size < 4 || parts[0] != "GeoChat") return null
         val senderUid = parts[1]
         if (!UID_PATTERN.matches(senderUid)) return null
-        val messageId = parts.last().takeIf { MESSAGE_ID_PATTERN.matches(it) }
+        // ATAK writes the id on `__chat` and at the end of the uid; it reads the attribute first.
+        val messageId = listOfNotNull(attr(chatTag, "messageId"), parts.last())
+            .firstOrNull { MESSAGE_ID_PATTERN.matches(it) }
 
         return InboundChat(
             room = room,

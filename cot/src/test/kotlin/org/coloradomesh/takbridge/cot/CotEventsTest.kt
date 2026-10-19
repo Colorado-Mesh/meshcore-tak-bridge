@@ -135,6 +135,20 @@ class CotEventsTest {
     }
 
     @Test
+    fun aDeliveryReceiptCarriesTheMessageIdAsItsUid() {
+        val cot = CotEvents.deliveryReceipt("6f9d2c1e-0a4b", "MESHCORE-0123456789abcdef", "Ann <base>", "ANDROID-1", now)
+        assertTrue(cot.startsWith("<event version=\"2.0\" uid=\"6f9d2c1e-0a4b\" type=\"b-t-f-d\""))
+        assertTrue(cot.contains("how=\"m-g\""))
+        assertTrue(cot.contains("messageId=\"6f9d2c1e-0a4b\""))
+        assertTrue(cot.contains("senderCallsign=\"Ann &lt;base&gt;\""))
+        assertTrue(cot.contains("<chatgrp uid0=\"MESHCORE-0123456789abcdef\" uid1=\"ANDROID-1\""))
+        assertTrue(cot.contains("<link uid=\"MESHCORE-0123456789abcdef\" type=\"a-f-G-U-C\" relation=\"p-p\"/>"))
+        assertEquals("b-t-f-d", CotParser.eventType(cot))
+        // A receipt is not a message, so the bridge never reads its own receipt back as chat.
+        assertEquals(null, CotParser.parseGeoChat(cot))
+    }
+
+    @Test
     fun xmlEscapeRoundTrips() {
         val text = "a < b & \"c\" > 'd'"
         assertEquals(text, unescapeXml(escapeXml(text)))

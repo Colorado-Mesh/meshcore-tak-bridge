@@ -67,6 +67,9 @@ object CotEvents {
     const val PING_TYPE = "t-x-c-t"
     const val PONG_TYPE = "t-x-c-t-r"
     const val GEOCHAT_TYPE = "b-t-f"
+
+    /** A delivery receipt for a GeoChat message, which ATAK shows on the message it sent. */
+    const val DELIVERED_TYPE = "b-t-f-d"
     private const val DELETE_TYPE = "t-x-d-d"
 
     /** The value CoT uses for an unknown height or error. */
@@ -133,6 +136,31 @@ object CotEvents {
             "<remarks source=\"BAO.F.ATAK.$sender\" to=\"$roomId\" time=\"$sent\">" +
             escapeXml(spec.text) +
             "</remarks>" +
+            "</detail>" +
+            "</event>"
+    }
+
+    /**
+     * Tells ATAK that its chat message [messageId] reached [fromUid], so ATAK marks it delivered.
+     *
+     * Built like ATAK's own receipts (`GeoChatService.sendStatusMessage` in ATAK's source): type
+     * `b-t-f-d`, and the event uid is the message id, which ATAK looks up in its chat history. The
+     * receipt comes from the recipient, here the mesh node's contact, back to the ATAK user [toUid].
+     */
+    fun deliveryReceipt(messageId: String, fromUid: String, fromCallsign: String, toUid: String, now: Instant): String {
+        val t = time(now)
+        val id = escapeXml(messageId)
+        val from = escapeXml(fromUid)
+        val callsign = escapeXml(fromCallsign)
+        return "<event version=\"2.0\" uid=\"$id\" type=\"$DELIVERED_TYPE\"" +
+            " time=\"$t\" start=\"$t\" stale=\"${time(now.plus(CHAT_STALE))}\" how=\"m-g\">" +
+            "<point lat=\"0\" lon=\"0\" hae=\"$UNKNOWN\" ce=\"$UNKNOWN\" le=\"$UNKNOWN\"/>" +
+            "<detail>" +
+            "<__chatreceipt parent=\"RootContactGroup\" groupOwner=\"false\" chatroom=\"$callsign\" id=\"$from\"" +
+            " messageId=\"$id\" senderCallsign=\"$callsign\">" +
+            "<chatgrp uid0=\"$from\" uid1=\"${escapeXml(toUid)}\" id=\"$from\"/>" +
+            "</__chatreceipt>" +
+            "<link uid=\"$from\" type=\"a-f-G-U-C\" relation=\"p-p\"/>" +
             "</detail>" +
             "</event>"
     }
