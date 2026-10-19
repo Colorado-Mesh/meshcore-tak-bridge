@@ -99,6 +99,7 @@ The `CompanionClient` in the `protocol` module runs the conversation once the li
 2. Device query: the reply gives the firmware version, model and the number of channel slots.
 3. Fetch contacts, then fetch each channel slot up to the number the radio reported (8 for firmware too old to say).
 4. Fetch waiting messages, then react to the radio's own "messages waiting" and "advert heard" notices.
+5. Read the battery voltage, then again every 5 minutes. Firmware that refuses the request is not asked again.
 
 The client never sets the radio's clock, channels, contacts, paths or settings. Sending channel text and sending a direct message are the only commands that cause a transmission.
 
@@ -192,6 +193,14 @@ MeshCore has no reply-to-message feature. Its apps start a reply with `@[Name]`,
 
 Per-person reply contacts in ATAK were considered, since they would need no typing, but on a busy mesh they would crowd the contact list. Received replies are shown as they arrive, `@[Name]` and all.
 
+## Radio battery
+
+The radio reports its battery only as a voltage, in answer to a request; it sends no low-battery notice of its own. The bridge reads it at connect and every 5 minutes, and turns it into an approximate percentage using the discharge curve of a typical lithium-ion cell (4.19 V full, 3.27 V empty). It is shown as "about", since the voltage reads high while charging and sags while transmitting. A reading of 0 means the board cannot measure its battery.
+
+The reading appears on the bridge's screen and in its notification. As it falls to 20% and to 10%, a heads-up alert appears over ATAK; each level alerts once, and again only after the battery has climbed 5 points above it.
+
+ATAK itself shows nothing. The radio is not on the map (the user's own marker is the phone), ATAK's battery field belongs to position reports, and a note in each channel's chat would mark every channel unread. A "Bridge" contact for radio notices was considered and set aside, to keep the contact list short.
+
 ## Echoes
 
 A channel message sent from ATAK should never come back to ATAK. The firmware marks each packet it floods as already seen, so a repeater's rebroadcast is dropped, and sending a channel message produces no received-message frame. The bridge still checks. A received channel message with the same channel and text as one it sent in the last 15 minutes (`"<radio name>: <text>"`, the form the radio transmits) is dropped and logged as an echo, so a device test can show whether it ever happens. The check could also drop an identical message from a different node with the same name as this radio. That is unlikely, and it is logged.
@@ -279,7 +288,7 @@ Not yet in place: a simulated radio that runs the whole bridge end to end on a c
 | 6. App shell | Done: radio picker, connection status, map settings, background service, Colorado Mesh header, icon and About |
 | 7. Field test and first release | Done: version 0.1.0 released 14 October 2026, signed with the Colorado Mesh release key; 0.1.1 followed on 17 October |
 
-Later candidates, in rough order: the radio's battery in ATAK, room server posts, splitting long messages, and sharing the phone's position to the mesh.
+Later candidates, in rough order: room server posts, splitting long messages, and sharing the phone's position to the mesh.
 
 ## Open questions and risks
 
@@ -296,6 +305,7 @@ Settled by testing on devices:
 Still open:
 
 - [ ] **Do ATAK's delivery receipts work through this server?** The bridge sends `b-t-f-d` for acknowledged direct messages (from 18 October 2026), built from ATAK's source; whether ATAK shows them as delivered still needs a device test.
+- [ ] **Does the battery estimate match what MeshCore's own apps show?** The curve is a typical one for lithium-ion cells; a device test against the MeshCore app on the same radio will tell.
 - [ ] **Which undocumented protocol details are stable?** The contact record and advert layouts come from firmware source, not the published page, and may change between firmware versions.
 - [ ] **Should the phone's position be shared to the mesh?** It would mean writing the radio's advertised location, which conflicts with the rule of never changing radio settings.
 - [x] **Who keeps the release signing key?** Bud creates and holds it (decided 14 October 2026), with a password-manager copy and an offline copy. GitHub keeps it as secrets in a `release` environment that a maintainer must approve each run to use. Every release must be signed with this key, or installed copies cannot update. See [RELEASING.md](RELEASING.md).

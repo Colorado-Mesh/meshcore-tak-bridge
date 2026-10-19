@@ -28,6 +28,8 @@ import org.coloradomesh.takbridge.protocol.Contact
 import org.coloradomesh.takbridge.protocol.DeviceInfo
 import org.coloradomesh.takbridge.protocol.DirectMessage
 import org.coloradomesh.takbridge.protocol.DirectOutcome
+import org.coloradomesh.takbridge.protocol.LowBatteryWatch
+import org.coloradomesh.takbridge.protocol.RadioBattery
 import org.coloradomesh.takbridge.protocol.SelfInfo
 import org.coloradomesh.takbridge.takserver.ApiServer
 import org.coloradomesh.takbridge.takserver.TakServer
@@ -38,6 +40,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
+import kotlin.math.abs
 
 /**
  * Keeps the local TAK server running while ATAK is in use. A foreground service with a visible
@@ -90,6 +93,16 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
 
     /** ATAK's id for a message it sent, and the node contact it went to. */
     private data class PendingReceipt(val messageId: String, val nodeUid: String, val nodeCallsign: String)
+
+    /** When the radio's battery deserves an alert; used while locked on itself. */
+    private val lowBattery = LowBatteryWatch()
+
+    /** The battery percentage last written to the log, so a steady battery does not fill it. */
+    @Volatile
+    private var loggedBatteryPercent: Int? = null
+
+    /** What the status notification says now; main thread only. */
+    private var notificationText = ""
 
     /** Who the connected ATAK says it is; learned from its first position report. */
     @Volatile
@@ -145,6 +158,7 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         if (address != wanted) {
             mesh.clear()
             replies.clear()
+            synchronized(lowBattery) { lowBattery.reset() }
         }
         wanted = address
         wantedName = name
@@ -163,7 +177,9 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         radioUp = false
         mesh.clear()
         replies.clear()
+        synchronized(lowBattery) { lowBattery.reset() }
         BridgeStatus.update { it.copy(radio = "No radio", radioBusy = false) }
+        clearBattery()
     }
 
     /** On a plain start, go back to the radio used last time. */
@@ -195,6 +211,7 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         radio = null
         radioUp = false
         BridgeStatus.update { it.copy(radioBusy = true, radio = "Connecting to $wantedName…") }
+        clearBattery()
         val open = Runnable { openRadio(address) }
         if (previous == null) {
             open.run()
@@ -236,6 +253,7 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         failures++
         val what = if (wasUp) "Lost $wantedName" else "Could not connect to $wantedName"
         BridgeStatus.update { it.copy(radio = "$what: $reason\nTrying again in $wait s") }
+        clearBattery()
         main.postDelayed(retry, wait * 1000L)
     }
 
@@ -254,6 +272,35 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
 
     override fun onDevice(info: DeviceInfo) {
         BridgeStatus.log("Radio: firmware ${info.version}, ${info.model}, ${info.maxChannels} channel slots")
+    }
+
+    /**
+     * A battery reading, at connect and every few minutes. It is shown on the screen and in the
+     * notification; an alert pops up, over ATAK too, as it falls to 20% and to 10%.
+     */
+    override fun onBattery(millivolts: Int) {
+        BridgeStatus.update { it.copy(batteryMillivolts = millivolts) }
+        val percent = RadioBattery.percent(millivolts) ?: NOT_MEASURED
+        val logged = loggedBatteryPercent
+        val worthLogging = logged == null || (percent == NOT_MEASURED) != (logged == NOT_MEASURED) ||
+            abs(percent - logged) >= BATTERY_LOG_STEP
+        if (worthLogging) {
+            BridgeStatus.log("Radio: battery ${RadioBattery.describe(millivolts)}")
+            loggedBatteryPercent = percent
+        }
+        val alert = if (percent == NOT_MEASURED) null else synchronized(lowBattery) { lowBattery.reading(percent) }
+        val name = mesh.selfName ?: wantedName
+        main.post {
+            refreshNotification()
+            if (alert != null) alertLowBattery(name, alert, millivolts)
+        }
+    }
+
+    /** Main thread. No reading is shown once the radio it came from is gone. */
+    private fun clearBattery() {
+        loggedBatteryPercent = null
+        BridgeStatus.update { it.copy(batteryMillivolts = null) }
+        refreshNotification()
     }
 
     override fun onContact(contact: Contact) {
@@ -411,7 +458,7 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         cancelPendingOpen()
         radio?.close()
         radio = null
-        BridgeStatus.update { it.copy(radio = "No radio", radioBusy = false) }
+        BridgeStatus.update { it.copy(radio = "No radio", radioBusy = false, batteryMillivolts = null) }
         worker.execute {
             refresher?.shutdownNow()
             refresher = null
@@ -426,24 +473,63 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         super.onDestroy()
     }
 
+    private fun notifications() = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+    private fun openScreen(): PendingIntent =
+        PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+
+    /** The status notification's text: the radio's battery when there is a reading, and the server. */
+    private fun statusText(): String {
+        val server = "TAK server on 127.0.0.1:${TakServer.DEFAULT_PORT}"
+        val battery = BridgeStatus.current().batteryMillivolts
+            ?.takeIf { RadioBattery.percent(it) != null }
+            ?.let { "Radio battery ${RadioBattery.describe(it)}" }
+        return listOfNotNull(battery, server).joinToString(" · ")
+    }
+
+    private fun statusNotification(text: String): Notification =
+        Notification.Builder(this, CHANNEL_ID)
+            .setContentTitle("MeshCore TAK Bridge")
+            .setContentText(text)
+            .setStyle(Notification.BigTextStyle().bigText(text))
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentIntent(openScreen())
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .build()
+
+    /** Main thread. Rewrites the status notification when its text has changed. */
+    private fun refreshNotification() {
+        val text = statusText()
+        if (text == notificationText || notificationText.isEmpty()) return
+        notificationText = text
+        notifications().notify(NOTIFICATION_ID, statusNotification(text))
+    }
+
+    /** Main thread. A heads-up alert, so it shows over ATAK, as the radio's battery falls to [level] percent. */
+    private fun alertLowBattery(radioName: String, level: Int, millivolts: Int) {
+        BridgeStatus.log("Radio: battery is low, ${RadioBattery.describe(millivolts)}")
+        val advice = if (level <= CRITICAL_BATTERY) "Charge it now to stay on the mesh." else "Charge it soon to stay on the mesh."
+        val alert = Notification.Builder(this, BATTERY_CHANNEL_ID)
+            .setContentTitle("Radio battery low")
+            .setContentText("$radioName is at ${RadioBattery.describe(millivolts)}. $advice")
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentIntent(openScreen())
+            .setAutoCancel(true)
+            .build()
+        notifications().notify(BATTERY_NOTIFICATION_ID, alert)
+    }
+
     private fun startInForeground() {
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val manager = notifications()
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "Bridge status", NotificationManager.IMPORTANCE_LOW),
         )
-        val open = PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE,
+        manager.createNotificationChannel(
+            NotificationChannel(BATTERY_CHANNEL_ID, "Radio battery low", NotificationManager.IMPORTANCE_HIGH),
         )
-        val notification = Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("MeshCore TAK Bridge")
-            .setContentText("Local TAK server running on 127.0.0.1:${TakServer.DEFAULT_PORT}")
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentIntent(open)
-            .setOngoing(true)
-            .build()
+        notificationText = statusText()
+        val notification = statusNotification(notificationText)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             // Android only allows the connected-device type once Bluetooth permission is held.
             val bluetooth = checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
@@ -640,6 +726,17 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         private val RETRY_SECONDS = intArrayOf(3, 5, 10, 20, 30, 60)
         private const val CHANNEL_ID = "bridge-status"
         private const val NOTIFICATION_ID = 1
+        private const val BATTERY_CHANNEL_ID = "radio-battery"
+        private const val BATTERY_NOTIFICATION_ID = 2
+
+        /** At or below this percentage the low-battery alert says to charge now, not soon. */
+        private const val CRITICAL_BATTERY = 10
+
+        /** The log notes the battery again only when it has moved this many percentage points. */
+        private const val BATTERY_LOG_STEP = 5
+
+        /** Stands for a reading from a radio that cannot measure its battery. */
+        private const val NOT_MEASURED = -1
         private const val REFRESH_MINUTES = 5L
         private const val MAX_BACKLOG = 50
 

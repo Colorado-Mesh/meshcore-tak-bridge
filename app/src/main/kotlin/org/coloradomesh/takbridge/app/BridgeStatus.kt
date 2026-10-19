@@ -13,6 +13,8 @@ data class BridgeState(
     val radio: String = "No radio",
     /** True while the bridge has a radio it is connected to or is trying to reach. */
     val radioBusy: Boolean = false,
+    /** The linked radio's last battery reading in millivolts; null when there is none. */
+    val batteryMillivolts: Int? = null,
     val log: List<String> = emptyList(),
 )
 

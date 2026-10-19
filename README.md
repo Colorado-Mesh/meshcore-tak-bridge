@@ -18,7 +18,7 @@ What works:
 - Replies on a channel in MeshCore's `@[Name]` form, typed as `@` and the start of a name, or `@@` for whoever spoke last.
 - Never writes to the radio's settings, channels, contacts or clock.
 
-Not yet: the radio's battery in ATAK.
+Since 0.1.1, in test builds: the radio's battery on the bridge's screen and in its notification, with an alert at 20% and 10% that shows over ATAK.
 
 ## Screenshots
 

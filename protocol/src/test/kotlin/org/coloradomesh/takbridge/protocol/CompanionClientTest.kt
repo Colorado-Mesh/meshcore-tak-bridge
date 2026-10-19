@@ -14,6 +14,7 @@ class CompanionClientTest {
     private val directs = ArrayList<DirectMessage>()
     private val directResults = ArrayList<Pair<String, DirectOutcome>>()
     private var channels: List<Channel>? = null
+    private val batteries = ArrayList<Int>()
     private var now = 1_800_000_000_000L
 
     private val client = CompanionClient(
@@ -28,6 +29,7 @@ class CompanionClientTest {
             override fun onDirectResult(id: Long, publicKeyHex: String, text: String, outcome: DirectOutcome) {
                 directResults.add(text to outcome)
             }
+            override fun onBattery(millivolts: Int) { batteries.add(millivolts) }
         },
         clock = { now },
     )
@@ -67,7 +69,12 @@ class CompanionClientTest {
         client.onFrame(byteArrayOf(1, 2))
         assertArrayEquals(byteArrayOf(0x0A), lastSent())
         client.onFrame(byteArrayOf(0x0A))
+        assertArrayEquals(byteArrayOf(0x14), lastSent())
+        client.onFrame(battery(3_900))
     }
+
+    private fun battery(millivolts: Int) =
+        byteArrayOf(0x0C, millivolts.toByte(), (millivolts shr 8).toByte()) + le32(100) + le32(2_000)
 
     @Test
     fun startUpReadsContactsAndChannelsInOrder() {
@@ -149,6 +156,47 @@ class CompanionClientTest {
         client.onFrame(channelInfo(0, "", programmed = false))
         assertEquals(emptyList<Channel>(), channels)
         assertEquals(1, log.size)
+    }
+
+    @Test
+    fun theBatteryIsReadAfterStartUpAndThenEveryFewMinutes() {
+        startUp()
+        assertEquals(listOf(3_900), batteries)
+        val before = sent.size
+        now += CompanionClient.BATTERY_INTERVAL_MS - 1_000
+        client.tick()
+        assertEquals(before, sent.size)
+        now += 1_000
+        client.tick()
+        assertArrayEquals(byteArrayOf(0x14), lastSent())
+        client.onFrame(battery(3_650))
+        assertEquals(listOf(3_900, 3_650), batteries)
+        assertTrue(log.isEmpty())
+    }
+
+    @Test
+    fun firmwareThatRefusesTheBatteryRequestIsNotAskedAgain() {
+        startUp()
+        now += CompanionClient.BATTERY_INTERVAL_MS
+        client.tick()
+        client.onFrame(byteArrayOf(1, 1))
+        val before = sent.size
+        now += 2 * CompanionClient.BATTERY_INTERVAL_MS
+        client.tick()
+        assertEquals(before, sent.size)
+        assertEquals(listOf("The radio refused the battery request (error 1)"), log)
+    }
+
+    @Test
+    fun aBatteryReadingWaitsItsTurnBehindMessages() {
+        startUp()
+        now += CompanionClient.BATTERY_INTERVAL_MS - 1_000
+        client.sendChannelText(0, "first")
+        now += 1_000
+        client.tick()
+        assertEquals(3, lastSent()[0].toInt())
+        client.onFrame(byteArrayOf(0))
+        assertArrayEquals(byteArrayOf(0x14), lastSent())
     }
 
     @Test

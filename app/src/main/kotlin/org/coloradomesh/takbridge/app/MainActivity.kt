@@ -32,6 +32,7 @@ import org.coloradomesh.takbridge.R
 import org.coloradomesh.takbridge.app.ble.FoundRadio
 import org.coloradomesh.takbridge.app.ble.RadioScanner
 import org.coloradomesh.takbridge.protocol.Contact
+import org.coloradomesh.takbridge.protocol.RadioBattery
 import org.coloradomesh.takbridge.takserver.TakServer
 
 /**
@@ -128,7 +129,7 @@ class MainActivity : Activity() {
         }
         toggleButton.text = if (state.running) "Stop bridge" else "Start bridge"
         logView.text = state.log.asReversed().joinToString("\n")
-        radioView.text = state.radio
+        radioView.text = state.batteryMillivolts?.let { "${state.radio}\nBattery: ${RadioBattery.describe(it)}" } ?: state.radio
         // Once the bridge is connecting to a radio, for example the one it reconnects to on
         // start, a scan list left on screen would only invite a second tap that restarts it.
         if (state.radioBusy && (scanning || found.isNotEmpty())) {

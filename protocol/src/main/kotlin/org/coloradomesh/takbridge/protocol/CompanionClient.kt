@@ -20,7 +20,8 @@ enum class DirectOutcome {
  * The radio answers one command at a time, so commands wait in a queue and each has a time
  * limit. After [start] the client introduces itself, reads the radio's capacity, its contacts
  * and every channel slot it reports, then collects queued messages; from then on it reacts to
- * the radio's own notices of new messages and adverts.
+ * the radio's own notices of new messages and adverts. It reads the battery once start-up is done
+ * and every [BATTERY_INTERVAL_MS] after that.
  *
  * A direct message is sent, then waited on for the recipient's acknowledgement, and sent again
  * up to [MAX_DIRECT_ATTEMPTS] times in all if none comes, as the MeshCore apps do.
@@ -63,6 +64,9 @@ class CompanionClient(
 
         /** How the direct message [id] from [sendDirectText] ended. Called once per message. */
         fun onDirectResult(id: Long, publicKeyHex: String, text: String, outcome: DirectOutcome) {}
+
+        /** The radio's battery voltage, at start-up and then every [BATTERY_INTERVAL_MS]; zero if it cannot measure it. */
+        fun onBattery(millivolts: Int) {}
     }
 
     private sealed interface Job {
@@ -73,6 +77,7 @@ class CompanionClient(
         data object Sync : Job
         data class SendText(val index: Int, val text: String) : Job
         data class SendDirect(val id: Long) : Job
+        data object Battery : Job
     }
 
     /** A direct message from the first try until it is acknowledged or given up on. */
@@ -96,6 +101,10 @@ class CompanionClient(
     private var warnedAboutOtherMessages = false
     private var selfName = ""
     private var nextDirectId = 1L
+
+    /** When to read the battery next; firmware that refuses the request is not asked again. */
+    private var nextBatteryAt = Long.MAX_VALUE
+    private var batteryRefused = false
     private val outbound = LinkedHashMap<Long, Outbound>()
     private val sentOnChannels = RecentKeys(ECHO_MEMORY, ECHO_WINDOW_MS, clock)
     private val directsHeard = RecentKeys(ECHO_MEMORY, ECHO_WINDOW_MS, clock)
@@ -156,6 +165,12 @@ class CompanionClient(
                 listener.onDirectResult(id, message.publicKeyHex, message.text, DirectOutcome.UNCONFIRMED)
             }
         }
+        if (ready && !batteryRefused && now >= nextBatteryAt) requestBattery()
+    }
+
+    private fun requestBattery() {
+        nextBatteryAt = clock() + BATTERY_INTERVAL_MS
+        enqueueOnce(Job.Battery)
     }
 
     @Synchronized
@@ -193,6 +208,7 @@ class CompanionClient(
         if (frame is CompanionFrame.Error) {
             // An empty or missing channel slot is reported as an error, which is not worth a log line.
             if (job !is Job.GetChannel) listener.onLog("The radio refused ${describe(job)} (error ${frame.code})")
+            if (job == Job.Battery) batteryRefused = true
             finish(job, answered = false)
             return
         }
@@ -259,6 +275,10 @@ class CompanionClient(
                 }
                 finish(job)
             }
+            Job.Battery -> if (frame is CompanionFrame.Battery) {
+                listener.onBattery(frame.millivolts)
+                finish(job)
+            }
         }
     }
 
@@ -295,6 +315,7 @@ class CompanionClient(
                 if (slotsLeft == 0) {
                     ready = true
                     listener.onChannels(channels.sortedBy { it.index })
+                    requestBattery()
                 }
             }
             else -> Unit
@@ -337,6 +358,7 @@ class CompanionClient(
             val message = outbound.getValue(job.id)
             CompanionFrames.sendDirectText(message.publicKeyHex, message.attempt, message.timestamp, message.text)
         }
+        Job.Battery -> CompanionFrames.getBattery()
     }
 
     private fun describe(job: Job): String = when (job) {
@@ -347,11 +369,15 @@ class CompanionClient(
         Job.Sync -> "the request for waiting messages"
         is Job.SendText -> "a message for channel ${job.index}"
         is Job.SendDirect -> "a direct message"
+        Job.Battery -> "the battery request"
     }
 
     companion object {
         /** Tries in all for a direct message, the first included. */
         const val MAX_DIRECT_ATTEMPTS = 3
+
+        /** How often the battery is read after the first time. */
+        const val BATTERY_INTERVAL_MS = 5 * 60_000L
 
         private const val APP_NAME = "TAKBridge"
         private const val TIMEOUT_MS = 6_000L
