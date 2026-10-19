@@ -127,9 +127,8 @@ reviews:
     enabled: true
     drafts: false
     auto_incremental_review: true
-    # Dependabot's action updates are checked by CI, CodeQL and zizmor.
-    ignore_usernames:
-      - "dependabot[bot]"
+    # Dependabot pull requests are reviewed too: they change the pinned actions in the workflows,
+    # and this review is the only place zizmor runs. They come monthly and grouped, so few.
 
   tools:
     # GitHub Actions: syntax, and security (the release job can read the signing key).
