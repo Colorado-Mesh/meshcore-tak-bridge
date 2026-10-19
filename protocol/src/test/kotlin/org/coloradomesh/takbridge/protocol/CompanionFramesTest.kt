@@ -135,4 +135,13 @@ class CompanionFramesTest {
         assertEquals(CompanionFrame.SendConfirmed(0x0A0B0C0D, 1_234), CompanionFrames.parse(confirmed))
         assertEquals(CompanionFrame.Other(6, 2), CompanionFrames.parse(byteArrayOf(6, 0)))
     }
+
+    @Test
+    fun readsTheBatteryVoltageWithOrWithoutStorage() {
+        assertArrayEquals(byteArrayOf(0x14), CompanionFrames.getBattery())
+        val full = byteArrayOf(0x0C, 0x3C, 0x0F) + le32(512) + le32(4096)
+        assertEquals(CompanionFrame.Battery(3_900), CompanionFrames.parse(full))
+        assertEquals(CompanionFrame.Battery(4_200), CompanionFrames.parse(byteArrayOf(0x0C, 0x68, 0x10)))
+        assertEquals(CompanionFrame.Other(0x0C, 2), CompanionFrames.parse(byteArrayOf(0x0C, 0x68)))
+    }
 }

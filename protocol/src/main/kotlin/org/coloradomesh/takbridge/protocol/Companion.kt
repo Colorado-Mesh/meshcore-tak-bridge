@@ -119,6 +119,9 @@ sealed interface CompanionFrame {
     /** A recipient acknowledged the direct message whose [Sent.ackCode] this is. */
     data class SendConfirmed(val ackCode: Long, val tripMs: Long) : CompanionFrame
 
+    /** The radio's battery voltage. Zero on boards that cannot measure it. */
+    data class Battery(val millivolts: Int) : CompanionFrame
+
     /** A queued message of a kind the bridge does not carry, such as channel data or a room server post. */
     data class OtherMessage(val code: Int) : CompanionFrame
 
@@ -158,6 +161,7 @@ object CompanionFrames {
     private const val CMD_GET_CONTACTS = 0x04
     private const val CMD_SYNC_NEXT_MESSAGE = 0x0A
     private const val CMD_GET_CHANNEL = 0x1F
+    private const val CMD_GET_BATTERY = 0x14
     private const val RESP_CONTACTS_START = 0x02
     private const val RESP_CONTACT = 0x03
     private const val RESP_END_OF_CONTACTS = 0x04
@@ -165,6 +169,7 @@ object CompanionFrames {
     private const val RESP_CONTACT_MSG = 0x07
     private const val RESP_CHANNEL_MSG = 0x08
     private const val RESP_NO_MORE_MESSAGES = 0x0A
+    private const val RESP_BATTERY = 0x0C
     private const val RESP_CONTACT_MSG_V3 = 0x10
     private const val RESP_CHANNEL_MSG_V3 = 0x11
     private const val RESP_CHANNEL_INFO = 0x12
@@ -212,6 +217,9 @@ object CompanionFrames {
 
     fun getChannel(index: Int): ByteArray = byteArrayOf(CMD_GET_CHANNEL.toByte(), index.toByte())
 
+    /** Asks for the battery voltage; the radio answers with [CompanionFrame.Battery]. */
+    fun getBattery(): ByteArray = byteArrayOf(CMD_GET_BATTERY.toByte())
+
     /** Collects one queued message; the radio answers with it or with [CompanionFrame.NoMoreMessages]. */
     fun syncNextMessage(): ByteArray = byteArrayOf(CMD_SYNC_NEXT_MESSAGE.toByte())
 
@@ -255,6 +263,8 @@ object CompanionFrames {
             RESP_CONTACT_MSG_V3 -> parseDirectText(frame, 4)
             RESP_CHANNEL_DATA -> CompanionFrame.OtherMessage(code)
             RESP_NO_MORE_MESSAGES -> CompanionFrame.NoMoreMessages
+            // Then the storage used and available, which the bridge does not need.
+            RESP_BATTERY -> if (frame.size >= 3) CompanionFrame.Battery(uint16(frame, 1)) else null
             PUSH_MSG_WAITING -> CompanionFrame.MessagesWaiting
             PUSH_ADVERT -> CompanionFrame.AdvertHeard
             else -> null
@@ -368,6 +378,9 @@ object CompanionFrames {
             ),
         )
     }
+
+    private fun uint16(frame: ByteArray, offset: Int): Int =
+        (frame[offset].toInt() and 0xFF) or ((frame[offset + 1].toInt() and 0xFF) shl 8)
 
     private fun uint32(frame: ByteArray, offset: Int): Long =
         (0..3).sumOf { (frame[offset + it].toLong() and 0xFF) shl (8 * it) }

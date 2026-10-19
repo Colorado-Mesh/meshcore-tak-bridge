@@ -1,6 +1,6 @@
 # Project status
 
-Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2026-10-17.
+Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2026-10-19.
 
 **Repository:** moved from RobertMTalbot/meshcore-tak-bridge to [Colorado-Mesh/meshcore-tak-bridge](https://github.com/Colorado-Mesh/meshcore-tak-bridge) on 2026-10-13. GitHub redirects the old address, but clones should point their remote at the new one.
 
@@ -46,6 +46,13 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
   - `@@ thanks` replies to whoever spoke last on that channel.
   - Several matches: nothing is sent, and a note in the chat lists them (up to 5). `@@` on a quiet channel: nothing is sent, with a note. No match: the text goes out exactly as typed, so a message that just starts with "@" is not changed by surprise. Text already in the `@[Name]` form is left alone.
   - Senders are learned from channel messages as they arrive (up to 50 per channel, by this phone's clock), forgotten when another radio is chosen, and never include this radio's own name. The logic is `ChannelReplies` in the `protocol` module, with tests.
+- **Radio battery** (built 2026-10-19, not yet seen on a device). MeshCore reports the battery only as a voltage, when asked, so the bridge asks once start-up is done and every 5 minutes after (`CMD_GET_BATTERY`, 0x14).
+  - The bridge's screen shows it under the radio, for example "Battery: about 72% (3.92 V)", and so does its notification, which can be pulled down over ATAK.
+  - The percentage is estimated from a typical lithium cell's discharge curve (`RadioBattery` in the `protocol` module). It reads high while the radio charges and a little low while it transmits.
+  - As the battery falls to 20%, and again to 10%, a heads-up alert ("Radio battery low") appears over whatever app is open. Each level alerts once, and again only after the battery has climbed 5 points above it, so a wobbling reading does not alert repeatedly.
+  - A radio that reports 0 V cannot measure its battery: the screen says so and no alert is raised. Firmware that refuses the request is not asked again.
+  - Nothing new appears in ATAK itself (decided 2026-10-19): the radio is not a marker, and a note in every channel's chat would mark them all unread.
+  - The log notes the battery at connect and when it has moved 5 points.
 - **No channel echoes** (checked 2026-10-12). A channel message sent from ATAK did not come back: the `Echo check:` log line never appeared. This matches the firmware, which marks its own flooded packets as seen. The guard stays in place: a received channel message matching one just sent from ATAK (`"<radio name>: <text>"`, same channel, within 15 minutes) is dropped and logged.
 - **Never writes to the radio's settings, channels, contacts or clock.**
 - **Colorado Mesh branding** (checked on a device, 13 October):
@@ -76,8 +83,7 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
 
 1. Possibly: room server posts, which arrive as signed messages and are skipped for now.
 2. **Replies, next steps** (see "Replies on a channel" above): tidy received `@[Name]` to `@Name` in ATAK, and possibly mark a reply addressed to this radio's name so it stands out on a busy channel. Per-person reply contacts in ATAK were considered and set aside (2026-10-17): too much clutter in the contact list.
-3. Later: radio battery in ATAK.
-4. Housekeeping: the release run notes that Gradle 8.11.1 is out of date. Update the wrapper and the Android Gradle plugin together, in their own pull request, and check a debug build on a device.
+3. Housekeeping: the release run notes that Gradle 8.11.1 is out of date. Update the wrapper and the Android Gradle plugin together, in their own pull request, and check a debug build on a device.
 
 In Claude cloud sessions, `./gradlew` cannot fetch Gradle or dependencies. The plain modules' tests can still be run with the Kotlin compiler and JUnit bundled in a local Gradle install. The app is only compiled in CI. Claude cannot push to the Colorado Mesh organisation yet (the Claude GitHub App is not installed there), so its changes come as patch files that a maintainer applies with `git am` and opens as a pull request.
 
