@@ -264,6 +264,24 @@ class CompanionClientTest {
     }
 
     @Test
+    fun pausingTrackingDoesNotResetTheInterval() {
+        startUp()
+        client.setTracking(setOf(tracker1), 120_000)
+        client.tick()
+        client.onFrame(sentFrame(ack = 77))
+        client.onFrame(telemetryFrom(0xAA.toByte()))
+        client.setTracking(emptySet(), 120_000) // ATAK disconnects
+        now += 10_000
+        client.setTracking(setOf(tracker1), 120_000) // and comes back
+        val before = sent.size
+        client.tick()
+        assertEquals("not asked again so soon", before, sent.size)
+        now += 110_000
+        client.tick()
+        assertTrue(isTelemetryRequestFor(tracker1, lastSent()))
+    }
+
+    @Test
     fun aRequestTheRadioRefusesIsReportedAsNotSent() {
         startUp()
         client.setTracking(setOf(tracker1), 300_000)

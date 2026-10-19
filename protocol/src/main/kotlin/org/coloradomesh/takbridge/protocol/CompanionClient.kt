@@ -134,6 +134,12 @@ class CompanionClient(
 
     /** Nodes to ask for their position, by public key, and when each was last asked. */
     private val tracked = LinkedHashMap<String, Long>()
+
+    /**
+     * When each node was last asked, kept while tracking is paused (as when ATAK reconnects) or a
+     * node is dropped and chosen again, so the interval still holds. Few entries: one per node ever tracked.
+     */
+    private val lastAsked = HashMap<String, Long>()
     private var trackingIntervalMs = DEFAULT_TRACKING_INTERVAL_MS
     private var awaitingTelemetry: AwaitingTelemetry? = null
     private val outbound = LinkedHashMap<Long, Outbound>()
@@ -179,7 +185,7 @@ class CompanionClient(
     fun setTracking(publicKeys: Set<String>, intervalMs: Long) {
         val keys = publicKeys.filter { it.length == 64 && it.all { c -> c in "0123456789abcdef" } }.toSet()
         tracked.keys.retainAll(keys)
-        for (key in keys) tracked.putIfAbsent(key, NEVER)
+        for (key in keys) tracked.putIfAbsent(key, lastAsked[key] ?: NEVER)
         trackingIntervalMs = intervalMs.coerceAtLeast(MIN_TRACKING_INTERVAL_MS)
         queue.removeAll { it is Job.Telemetry && it.publicKeyHex !in tracked }
     }
@@ -224,6 +230,7 @@ class CompanionClient(
         if (awaitingTelemetry != null || current is Job.Telemetry || queue.any { it is Job.Telemetry }) return
         val due = tracked.entries.filter { it.value == NEVER || now - it.value >= trackingIntervalMs }.minByOrNull { it.value } ?: return
         due.setValue(now)
+        lastAsked[due.key] = now
         enqueue(Job.Telemetry(due.key))
     }
 
