@@ -18,7 +18,7 @@ What works:
 - Replies on a channel in MeshCore's `@[Name]` form, typed as `@` and the start of a name, or `@@` for whoever spoke last.
 - Never writes to the radio's settings, channels, contacts or clock.
 
-Since 0.1.1, in test builds: the radio's battery on the bridge's screen and in its notification, with an alert at 20% and 10% that shows over ATAK.
+Since 0.1.1, in test builds: the radio's battery on the bridge's screen and in its notification, with an alert at 20% and 10% that shows over ATAK. The percentage is estimated from a lithium cell's discharge curve, so as the battery runs down it reads lower than the MeshCore app's, which scales evenly from 3.0 V to 4.2 V: at 3.5 V the bridge says about 20% and the MeshCore app 42%.
 
 ## Screenshots
 
