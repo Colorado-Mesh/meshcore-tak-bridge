@@ -1,8 +1,10 @@
 # Project status
 
-Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2026-10-19.
+Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2026-10-20.
 
 **Repository:** moved from RobertMTalbot/meshcore-tak-bridge to [Colorado-Mesh/meshcore-tak-bridge](https://github.com/Colorado-Mesh/meshcore-tak-bridge) on 2026-10-13. GitHub redirects the old address, but clones should point their remote at the new one.
+
+**Release candidate: 0.1.2**, version code 3, from CI build #81 (`9c0dc45`), which ran overnight on the Tab Active 3 from 19 to 20 October with no problems. New since 0.1.1, each checked on a device: delivery receipts for direct messages (2026-10-19), the radio's battery on the bridge's screen and in its notification with low-battery alerts (2026-10-19; the alert itself not yet seen), and tracking of chosen companions (2026-10-19).
 
 **Latest release: [0.1.1](https://github.com/Colorado-Mesh/meshcore-tak-bridge/releases/tag/v0.1.1), published 17 October 2026.** Version code 2, tag `v0.1.1` on commit `2b45e8d`, built and signed by the release workflow (run 39063380535). It installs over 0.1.0 and keeps the radio and map settings. Signed with the same certificate as 0.1.0 (SHA-256 `f59a5a05f3924b8e0dd2cc24aeb4f11405875d966d68bc25c2bbae9d38a7e554`), read independently from the published APK, whose checksum also matches. Since 0.1.0:
 - Replies on a channel, `@name` and `@@` (checked on a device, 2026-10-17).
