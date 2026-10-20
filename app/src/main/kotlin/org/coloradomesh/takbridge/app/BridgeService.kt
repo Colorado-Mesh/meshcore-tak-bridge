@@ -217,7 +217,7 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
                     "position" to "at $where ($at)"
                 }
             }
-            TelemetryOutcome.NoAnswer -> "no answer" to "no answer at $at (out of range, or location sharing not allowed)"
+            TelemetryOutcome.NoAnswer -> "no answer" to "no answer at $at: out of range, location sharing not allowed, or its contact for this radio is out of date (an advert from each radio fixes that)"
             TelemetryOutcome.NotSent -> "not sent" to "the radio did not send the request at $at"
         }
         trackState[publicKeyHex] = state

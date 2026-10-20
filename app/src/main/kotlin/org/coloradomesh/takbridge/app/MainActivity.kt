@@ -712,8 +712,9 @@ class MainActivity : Activity() {
 
         val TRACKING_TEXT = "Ask chosen companions where they are while ATAK is connected; their markers move " +
             "as they answer, and ATAK can draw their tracks. Each needs a GPS that is on, and its owner must allow " +
-            "location telemetry for everyone or for your radio. Every request uses airtime, so choose only the " +
-            "people you are working with."
+            "location telemetry for everyone or for your radio. Like direct messages, it needs each radio to have a " +
+            "current contact for the other; if one never answers, an advert from each radio usually fixes it. " +
+            "Every request uses airtime, so choose only the people you are working with."
 
         /** Hours, and how each choice reads; 0 means never hide. */
         val AGE_CHOICES = listOf(
