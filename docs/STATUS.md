@@ -4,15 +4,13 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
 
 **Repository:** moved from RobertMTalbot/meshcore-tak-bridge to [Colorado-Mesh/meshcore-tak-bridge](https://github.com/Colorado-Mesh/meshcore-tak-bridge) on 2026-10-13. GitHub redirects the old address, but clones should point their remote at the new one.
 
-**Release candidate: 0.1.2**, version code 3, from CI build #81 (`9c0dc45`), which ran overnight on the Tab Active 3 from 19 to 20 October with no problems. New since 0.1.1, each checked on a device: delivery receipts for direct messages (2026-10-19), the radio's battery on the bridge's screen and in its notification with low-battery alerts (2026-10-19; the alert itself not yet seen), and tracking of chosen companions (2026-10-19).
-
-**Latest release: [0.1.1](https://github.com/Colorado-Mesh/meshcore-tak-bridge/releases/tag/v0.1.1), published 17 October 2026.** Version code 2, tag `v0.1.1` on commit `2b45e8d`, built and signed by the release workflow (run 39063380535). It installs over 0.1.0 and keeps the radio and map settings. Signed with the same certificate as 0.1.0 (SHA-256 `f59a5a05f3924b8e0dd2cc24aeb4f11405875d966d68bc25c2bbae9d38a7e554`), read independently from the published APK, whose checksum also matches. Since 0.1.0:
-- Replies on a channel, `@name` and `@@` (checked on a device, 2026-10-17).
-- An answer for ATAK's mission-invitations request, so "Failed to get invitations from all … (404)" no longer appears at connect (checked on a device, 2026-10-17).
-- The setup text on the bridge's screen: no more line breaks mid-sentence, and it now covers direct messages and replies.
-- The node-type checkboxes are tinted (Colorado Mesh yellow when ticked, light grey when not); they were hard to see on the dark background.
+**Latest release: [0.1.2](https://github.com/Colorado-Mesh/meshcore-tak-bridge/releases/tag/v0.1.2), published 20 October 2026.** Version code 3, tag `v0.1.2` on commit `43a7d1a`, built and signed by the release workflow (run 39429231921). Its app code is that of CI build #81 (`9c0dc45`), run overnight on the Tab Active 3 from 19 to 20 October with no problems. It installs over 0.1.1 and keeps the radio, map and tracking settings. Signed with the same certificate as before (SHA-256 `f59a5a05f3924b8e0dd2cc24aeb4f11405875d966d68bc25c2bbae9d38a7e554`), read independently from the published APK, whose checksum also matches. Since 0.1.1:
+- Delivery receipts: ATAK shows its delivered check mark when the mesh acknowledges a direct message (checked on a device, 2026-10-19).
+- The radio's battery on the bridge's screen and in its notification, with low-battery alerts at 20% and 10% (checked on a device, 2026-10-19; the alert itself not yet seen).
+- Tracking of up to 10 chosen companions by asking them for their position (checked on a device, 2026-10-19).
 
 **Earlier releases:**
+- [0.1.1](https://github.com/Colorado-Mesh/meshcore-tak-bridge/releases/tag/v0.1.1), 17 October 2026: version code 2, tag `v0.1.1` on `2b45e8d` (run 39063380535). Replies on a channel (`@name`, `@@`), an answer for ATAK's mission-invitations request, cleaner setup text, and tinted checkboxes.
 - [0.1.0](https://github.com/Colorado-Mesh/meshcore-tak-bridge/releases/tag/v0.1.0), 14 October 2026: version code 1, tag `v0.1.0` on `48a2501` (run 38587020807). Its app code was that of CI build #43 (`71b00f3`), run on the Tab Active 3 from the evening of 13 October with no problems. The first signed release; the certificate was checked against the key holder's own copy. Before it, the last overnight burn-in was build #31 (12–13 October).
 
 ## What works (tested on a Pixel 9 Pro and a Galaxy Tab Active 3)

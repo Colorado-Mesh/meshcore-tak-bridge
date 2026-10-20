@@ -298,6 +298,7 @@ Not yet in place: a simulated radio that runs the whole bridge end to end on a c
 | 5a. Direct messages and echo check | Done; direct messages tested both ways, no channel echoes seen |
 | 6. App shell | Done: radio picker, connection status, map settings, background service, Colorado Mesh header, icon and About |
 | 7. Field test and first release | Done: version 0.1.0 released 14 October 2026, signed with the Colorado Mesh release key; 0.1.1 followed on 17 October |
+| 8. Receipts, radio battery and tracking | Done: version 0.1.2, released 20 October 2026 |
 
 Later candidates, in rough order: room server posts, splitting long messages, and sharing the phone's position to the mesh.
 
