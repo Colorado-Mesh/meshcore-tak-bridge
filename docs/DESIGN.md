@@ -1,6 +1,6 @@
 # MeshCore TAK Bridge: Design
 
-First written as a proposal on 11 October 2026. Revised 12 October 2026 to describe the app as built and tested on devices, 13 October 2026 for the move to Colorado Mesh, the connection fixes and the app's branding, 14 October 2026 for the first release, and 17 October 2026 for replies on a channel. Current progress and the to-do list are in [STATUS.md](STATUS.md).
+First written as a proposal on 11 October 2026. Revised 12 October 2026 to describe the app as built and tested on devices, 13 October 2026 for the move to Colorado Mesh, the connection fixes and the app's branding, 14 October 2026 for the first release, 17 October 2026 for replies on a channel, 18 to 20 October 2026 for delivery receipts, the radio's battery, tracking and the 0.1.2 release, and 20 October 2026 for the next steps. Current progress and the to-do list are in [STATUS.md](STATUS.md).
 
 ## Summary
 
@@ -32,7 +32,7 @@ A bridge app avoids the last two by design: it speaks only the standard TAK serv
 
 ## Goals and non-goals
 
-**Goals for version 1**
+**Goals**, all met by version 0.1.2 (20 October 2026):
 
 - Connect reliably to a MeshCore companion radio over Bluetooth on a range of Android devices, including older Samsung tablets.
 - Show every mesh node that advertises a position as an ATAK map marker, styled by what it is: companion, repeater, room server or sensor.
@@ -41,15 +41,15 @@ A bridge app avoids the last two by design: it speaks only the standard TAK serv
 - Never change the radio's configuration. No channels, contacts, settings or clock are written, and nothing is left behind after disconnect.
 - Work with any current ATAK version without being rebuilt.
 
-**Not in version 1**
+Added since the first goals were set: direct messages with companion nodes (12 October 2026, see "Direct messages"), replies on a channel (17 October), delivery receipts and the radio's battery (18 and 19 October), and tracking chosen companions (19 October, see "Tracking").
+
+**Left out on purpose**
 
 - Sending ATAK map points, routes or drawings between ATAK users over the mesh. This is what TAK-MESHCORE's `ATAK_DATA` tunnel does, and it is the main source of that plugin's complexity and airtime use.
 - Its own encryption layer. MeshCore channels are already encrypted with the channel key.
 - Meshtastic or Reticulum support.
 - iPhone support. iTAK cannot be served this way from an Android app.
 - Anything inside ATAK's interface: no custom tools, menus or buttons. That would need a plugin.
-
-Direct messages with companion nodes were left out of the first pass and added on 12 October 2026 (see "Direct messages" below). Tracking chosen companions by asking them for their position was added on 19 October 2026 (see "Tracking").
 
 ## Architecture
 
@@ -270,7 +270,7 @@ The proposal had separate `bridge` and `ble` modules. In practice the mapping (`
 
 Other choices:
 
-- **Android versions:** Android 8 (API 26) or later, targeting API 34.
+- **Android versions:** Android 8 (API 26) or later, targeting API 34. Moving to API 36 is the second of the next steps (see "Development plan").
 - **Background running:** a foreground service with a persistent notification. The Tab Active 3 held the radio link overnight without being stopped by power saving.
 - **Interface:** built in code, with no layout resources. The screen opens with a Colorado Mesh header (navy, the app icon, name and version, over a red-to-yellow line like the logo's arc) and ends with an About section linking to the source code and coloradomesh.org.
 - **Icon:** an adaptive icon, with a themed version and a matching status bar icon: the Colorado Mesh mark, its arc closed into a map crosshair, in the Colorado Mesh colours. It uses no ATAK or TAK artwork, since the project is not affiliated with the TAK Product Center. `docs/icon/make_icon.py` writes the vector drawables and a preview from one description.
@@ -283,7 +283,7 @@ Other choices:
 - **Unit tests.** `protocol` is tested with recorded byte frames and a scripted radio for the client's command queue; `cot` with expected events and parsing of what ATAK sends; `takserver` with a scripted client that connects, pings and exchanges chat.
 - **On-device checks.** Bluetooth and ATAK behaviour are checked by hand on a Pixel 9 Pro and a Galaxy Tab Active 3.
 
-Not yet in place: a simulated radio that runs the whole bridge end to end on a computer, and a written on-device test script for releases.
+Not yet in place: a written on-device checklist for releases, which is the first of the next steps (see "Development plan"), and a simulated radio that runs the whole bridge end to end on a computer.
 
 ## Development plan
 
@@ -292,7 +292,7 @@ Not yet in place: a simulated radio that runs the whole bridge end to end on a c
 | 0. Repository, build, tests on every change | Done |
 | 1. ATAK spike: loopback TAK server with demo data | Done; ATAK accepts plain TCP on `127.0.0.1` |
 | 2. Bluetooth spike | Done on both test devices, including reconnect |
-| 3. Protocol | Done for what version 1 needs |
+| 3. Protocol | Done for everything the app uses |
 | 4. Nodes on the map | Done, with type and age filters, team colour and icons |
 | 5. Channel chat | Done, with channels as contacts |
 | 5a. Direct messages and echo check | Done; direct messages tested both ways, no channel echoes seen |
@@ -300,7 +300,15 @@ Not yet in place: a simulated radio that runs the whole bridge end to end on a c
 | 7. Field test and first release | Done: version 0.1.0 released 14 October 2026, signed with the Colorado Mesh release key; 0.1.1 followed on 17 October |
 | 8. Receipts, radio battery and tracking | Done: version 0.1.2, released 20 October 2026 |
 
-Later candidates, in rough order: room server posts, splitting long messages, and sharing the phone's position to the mesh.
+### Next steps
+
+Set on 20 October 2026, in this order. The aim now is wider use, so releases should stay dependable and new features should follow what users ask for.
+
+1. **A release test checklist.** A written list of checks on a device, about 15 minutes, run on every release candidate before it is tagged: connect and reconnect, markers and filters, channel and direct chat both ways, replies, receipts, battery, tracking, and installing over the previous release. It turns what has so far been checked from memory into a routine, and RELEASING.md will point to it.
+2. **Toolchain update.** The Gradle wrapper (8.11.1, which the release run reports as out of date) and the Android Gradle plugin, together, and the target and compile SDK from 34 to 36. Targeting Android 15 and later makes apps draw under the status bar, so the screen must make room for the system bars. Checked with a debug build on both test devices. This keeps CI current, and is also what Google Play would need (see "Open questions and risks").
+3. **Features chosen from what users report.** Candidates, with no order until issues show one: room server posts, which arrive as signed messages and are skipped for now; splitting messages too long for one MeshCore packet; and tidying replies, showing a received `@[Name]` as `@Name` and marking replies addressed to this radio.
+
+Sharing the phone's position to the mesh stays an open question rather than a candidate, since it would mean writing a radio setting.
 
 ## Open questions and risks
 
@@ -321,5 +329,6 @@ Still open:
 
 - [ ] **Which undocumented protocol details are stable?** The contact record and advert layouts come from firmware source, not the published page, and may change between firmware versions.
 - [ ] **Should the phone's position be shared to the mesh?** It would mean writing the radio's advertised location, which conflicts with the rule of never changing radio settings.
+- [ ] **When to publish on Google Play?** Not until the app is in wider use (decided 20 October 2026). What it will take, as of October 2026: a developer account (personal accounts must first run a closed test with 12 testers for 14 days; an organisation account needs Colorado Mesh to be a legal entity with a D-U-N-S number); target API 36 (next step 2); an app bundle as well as the APK; the existing release key uploaded to Play App Signing, so Play and GitHub installs keep the same signature and can update each other; a privacy policy, the Data safety form, and a declaration for the special-use foreground service. "TAK" in the name may draw a closer look under Play's impersonation policy. Google's developer verification, required even for apps installed from outside Play on certified devices worldwide from 2027, may make an account worth having before then.
 
 Decided on 11 October 2026: the name is MeshCore TAK Bridge, and the licence is GPL-3.0-or-later.
