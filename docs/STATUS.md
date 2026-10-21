@@ -63,8 +63,9 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
   - Decided 2026-10-19: ask only nodes chosen in advance, and leave drawing the track to ATAK. Trails built from adverts were set aside (companions advert only when their owner chooses), and sharing this phone's position was set aside too (it would mean writing the radio's advert location).
 - **MECP emergency messages** (built 2026-10-21, not yet seen on a device). See "MECP messages" in DESIGN.md.
   - A channel or direct message in MECP form (mecp.radio) is shown in ATAK's chat in English, with the code line kept below it. Drills say DRILL; unknown codes are named.
-  - One with coordinates becomes a spot marker, coloured by severity (grey for drills), with the details in its remarks; it stays from 2 hours (ROUTINE) to a day (MAYDAY, URGENT). Beacons share one moving marker per sender; D04 takes down the sender's latest.
-  - Opt-in on the bridge's screen: a real MAYDAY with a position also sounds ATAK's emergency alarm, once, cancelled by B03 or D04.
+  - One with coordinates becomes a spot marker, coloured by severity (grey for drills), with the details in its remarks; it stays from 2 hours (ROUTINE) to a day (MAYDAY, URGENT). At most 50, the least serious dropped first. An active beacon (B01) has one moving marker per sender.
+  - Opt-in on the bridge's screen: a real MAYDAY with a position also sounds ATAK's emergency alarm, once.
+  - Cancels (B03 "I am OK", D04 "sent in error") are acted on only from a direct message, whose sender the radio knows. On a channel anyone can write any name in front of a message, so there a cancel is only noted on the marker it names (CodeRabbit, pull request #26).
   - Decided 2026-10-21: receiving first; sending MECP from ATAK later. English only for now; the MECP table comes in 20 languages.
 - **No channel echoes** (checked 2026-10-12). A channel message sent from ATAK did not come back: the `Echo check:` log line never appeared. This matches the firmware, which marks its own flooded packets as seen. The guard stays in place: a received channel message matching one just sent from ATAK (`"<radio name>: <text>"`, same channel, within 15 minutes) is dropped and logged.
 - **Never writes to the radio's settings, channels, contacts or clock.**

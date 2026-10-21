@@ -61,6 +61,8 @@ class MeshPicture {
         val latitude: Double,
         val longitude: Double,
         val heardAt: Long,
+        /** Later messages about this one that were not acted on, such as an unverified cancel. */
+        val notes: List<String> = emptyList(),
     )
 
     /** An MECP marker's uid and place, for raising or cancelling an ATAK alert about it. */
@@ -135,27 +137,59 @@ class MeshPicture {
      * A received MECP message, from [sender], heard [where] ("on #emergency"). Returns where its
      * marker is, or null when it has no position to show.
      *
-     * Beacon messages (B01 active, B02 acknowledged, B03 cancelled) share one marker per sender,
-     * which moves as the beacon repeats and keeps its place when an update has no position. Any
-     * other message gets its own marker; a copy heard again lands on the same one.
+     * An active beacon (B01) has one marker per sender, which moves as the beacon repeats. Any
+     * other message, a beacon acknowledgement (B02) included, since that comes from whoever
+     * answers the beacon, gets its own marker; a copy heard again lands on the same one.
      */
     fun putMecp(sender: String, where: String, message: Mecp.Message, nowSeconds: Long): MecpPlace? = synchronized(mecpMarks) {
-        val beacon = message.codes.any { it in BEACON_CODES }
-        val uid = if (beacon) "MECP-B-${digest(sender)}" else "MECP-${digest("$sender|${message.raw}")}"
-        val previous = mecpMarks.remove(uid)
-        val lat = message.latitude ?: previous?.latitude ?: return null
-        val lon = message.longitude ?: previous?.longitude ?: return null
+        val uid = if (BEACON_ON in message.codes) beaconUid(sender) else "MECP-${digest("$sender|${message.raw}")}"
+        val lat = message.latitude ?: return null
+        val lon = message.longitude ?: return null
+        mecpMarks.remove(uid)
         mecpMarks[uid] = MecpMark(uid, sender, where, message, lat, lon, nowSeconds)
-        while (mecpMarks.size > MAX_MECP_MARKS) mecpMarks.remove(mecpMarks.keys.first())
+        while (mecpMarks.size > MAX_MECP_MARKS) evictOne()
         MecpPlace(uid, sender, lat, lon)
     }
 
-    /** "Ignore previous, sent in error" (D04): drop [sender]'s latest MECP marker, and say which it was. */
+    /**
+     * Spam must not push a real emergency off the map, so the least serious marker goes first:
+     * drills, then ROUTINE, and so on up to MAYDAY, the oldest first among equals.
+     */
+    private fun evictOne() {
+        val victim = mecpMarks.values.maxByOrNull { if (it.message.isDrill) DRILL_RANK else it.message.severity } ?: return
+        mecpMarks.remove(victim.uid)
+    }
+
+    /**
+     * "Cancel beacon, I am OK" (B03) from [sender], whose identity is known: their beacon marker
+     * now shows the cancel, in its place. Returns it, or null when they had no beacon on the map.
+     */
+    fun endBeacon(sender: String, where: String, message: Mecp.Message, nowSeconds: Long): MecpPlace? = synchronized(mecpMarks) {
+        val uid = beaconUid(sender)
+        val beacon = mecpMarks.remove(uid) ?: return null
+        mecpMarks[uid] = beacon.copy(where = where, message = message, heardAt = nowSeconds)
+        MecpPlace(uid, sender, beacon.latitude, beacon.longitude)
+    }
+
+    /** "Ignore previous, sent in error" (D04) from [sender], whose identity is known: drop their latest marker. */
     fun forgetLatestMecp(sender: String): MecpPlace? = synchronized(mecpMarks) {
         val latest = mecpMarks.values.lastOrNull { it.sender == sender } ?: return null
         mecpMarks.remove(latest.uid)
         MecpPlace(latest.uid, latest.sender, latest.latitude, latest.longitude)
     }
+
+    /**
+     * Adds [note] to [sender]'s beacon marker, or else their latest marker, without changing it:
+     * for a cancel that cannot be trusted. Returns the marker noted, or null when there is none.
+     */
+    fun noteOnMecp(sender: String, note: String, beaconFirst: Boolean): MecpPlace? = synchronized(mecpMarks) {
+        val mark = (if (beaconFirst) mecpMarks[beaconUid(sender)] else null)
+            ?: mecpMarks.values.lastOrNull { it.sender == sender } ?: return null
+        mecpMarks[mark.uid] = mark.copy(notes = (mark.notes + note).takeLast(MAX_NOTES))
+        MecpPlace(mark.uid, sender, mark.latitude, mark.longitude)
+    }
+
+    private fun beaconUid(sender: String) = "MECP-B-${digest(sender)}"
 
     /** The companion whose name is [name], so an alert can name the node it is about. */
     fun companionNamed(name: String): Contact? =
@@ -174,7 +208,8 @@ class MeshPicture {
                 longitude = mark.longitude,
                 colorArgb = if (m.isDrill) DRILL_COLOUR else SEVERITY_COLOURS[m.severity],
                 remarks = "${Mecp.describe(m)}\n${m.raw}\nFrom ${mark.sender} ${mark.where}, heard " +
-                    "${TIME.format(Instant.ofEpochSecond(mark.heardAt))} UTC, through MeshCore TAK Bridge",
+                    "${TIME.format(Instant.ofEpochSecond(mark.heardAt))} UTC, through MeshCore TAK Bridge" +
+                    mark.notes.joinToString("") { "\n$it" },
                 staleAfter = if (left < Duration.ofMinutes(1)) Duration.ofMinutes(1) else left,
             )
         }
@@ -438,9 +473,13 @@ class MeshPicture {
         const val DEFAULT_COMPANION_TEAM = "Cyan"
         private const val LOCK = "🔒"
 
-        /** MECP's beacon codes: active, acknowledged, cancelled. */
-        private val BEACON_CODES = setOf("B01", "B02", "B03")
+        /** MECP's "distress beacon active". */
+        private const val BEACON_ON = "B01"
         private const val MAX_MECP_MARKS = 50
+        private const val MAX_NOTES = 5
+
+        /** Drills rank below ROUTINE (3) when markers must be dropped. */
+        private const val DRILL_RANK = 4
         private val MECP_LIFETIMES = listOf(Duration.ofHours(24), Duration.ofHours(24), Duration.ofHours(12), Duration.ofHours(2))
 
         /** Spot marker colours by severity, as ATAK's signed ARGB: red, orange, yellow, white; grey for drills. */

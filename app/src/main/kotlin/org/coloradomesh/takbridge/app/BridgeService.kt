@@ -445,7 +445,7 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
                     return
                 }
                 server?.send(CotEvents.geoChat(line, Instant.now()))
-                mecp?.let { onMecp(it.sender ?: "an unnamed sender", "on ${line.senderCallsign}", it.message) }
+                mecp?.let { onMecp(it.sender ?: "an unnamed sender", "on ${line.senderCallsign}", it.message, verified = false) }
             }
             is DirectMessage -> {
                 val active = server ?: return
@@ -459,7 +459,7 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
                 active.send(CotEvents.geoChat(mesh.directLine(shown, atak), Instant.now()))
                 if (mecp != null) {
                     val sender = contact?.let { mesh.displayName(it) } ?: message.senderPrefixHex.take(8)
-                    onMecp(sender, "in a direct message", mecp.message)
+                    onMecp(sender, "in a direct message", mecp.message, verified = contact != null)
                 }
             }
         }
@@ -474,49 +474,75 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
     /**
      * A received MECP message: log it, put it on the map when it gives a position, and, when
      * the user has chosen it, sound ATAK's emergency alarm for a real MAYDAY.
+     *
+     * [verified] is true when the radio knows who sent it: a direct message, whose sender is
+     * the contact whose key it was encrypted with. A channel message's sender is only the name
+     * written in front of it, which anyone on the channel can write. So a cancel ("I am OK",
+     * B03, or "sent in error", D04) is acted on only when verified; on a channel it is noted on
+     * the marker it would have cancelled, which stays as it was.
      */
-    private fun onMecp(sender: String, where: String, message: Mecp.Message) {
+    private fun onMecp(sender: String, where: String, message: Mecp.Message, verified: Boolean) {
         BridgeStatus.log("MECP from $sender $where: ${Mecp.describe(message)}")
         val active = server ?: return
         val now = Instant.now()
-        if ("D04" in message.codes) {
-            // "Ignore previous, sent in error": take down the sender's latest marker and alert.
-            mesh.forgetLatestMecp(sender)?.let { place ->
-                cancelAlert(active, place, now)
-                sendMeshMarkers(active)
+        val beaconOff = "B03" in message.codes
+        if (beaconOff || "D04" in message.codes) {
+            if (!verified) {
+                val at = LocalTime.now(java.time.ZoneOffset.UTC).format(CLOCK)
+                val note = "$at UTC: \"${Mecp.describe(message)}\" sent $where under this name, which a channel does not verify; not acted on"
+                mesh.noteOnMecp(sender, note, beaconFirst = beaconOff)?.let { sendMecpMarker(active, it.uid, now) }
+                BridgeStatus.log("MECP: a cancel from \"$sender\" $where is not acted on, since a channel cannot show who sent it")
+                return
+            }
+            if (beaconOff) {
+                mesh.endBeacon(sender, where, message, now.epochSecond)?.let { sendMecpMarker(active, it.uid, now) }
+                cancelAlertsFrom(active, sender, now)
+            } else {
+                mesh.forgetLatestMecp(sender)?.let { place ->
+                    cancelAlert(active, alertUid(place), now)
+                    sendMeshMarkers(active)
+                }
             }
             return
         }
         val place = mesh.putMecp(sender, where, message, now.epochSecond) ?: return
-        mesh.markers(now.epochSecond).firstOrNull { it.uid == place.uid }?.let {
-            active.send(CotEvents.marker(it, now))
-            onMap.add(it.uid)
-        }
-        when {
-            "B03" in message.codes -> cancelAlert(active, place, now)
-            message.severity == 0 && !message.isDrill && message.hasPosition && prefs().getBoolean(PREF_MECP_ALARM, false) ->
-                raiseAlert(active, place, now)
-        }
+        sendMecpMarker(active, place.uid, now)
+        if (message.severity == 0 && !message.isDrill && prefs().getBoolean(PREF_MECP_ALARM, false)) raiseAlert(active, place, now)
     }
 
-    /** MECP markers ATAK has been alerted about, by the alert's uid, so each alarm sounds once. */
-    private val alerted: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private fun sendMecpMarker(active: TakServer, uid: String, now: Instant) {
+        val marker = mesh.markers(now.epochSecond).firstOrNull { it.uid == uid } ?: return
+        if (active.send(CotEvents.marker(marker, now))) onMap.add(uid)
+    }
+
+    /** ATAK alerts raised for MECP messages, by the alert's uid, so each sounds once and can be cancelled. */
+    private val alerts = ConcurrentHashMap<String, MeshPicture.MecpPlace>()
 
     private fun alertUid(place: MeshPicture.MecpPlace) = "MECP-ALERT-${place.uid.removePrefix("MECP-")}"
 
+    /** Raise ATAK's alert once per MAYDAY; it counts as raised only once ATAK has been sent it. */
     private fun raiseAlert(active: TakServer, place: MeshPicture.MecpPlace, now: Instant) {
         val uid = alertUid(place)
-        if (!alerted.add(uid)) return
+        if (alerts.containsKey(uid)) return
         val about = mesh.companionNamed(place.sender)?.let { mesh.markerUid(it) } ?: place.uid
-        BridgeStatus.log("MECP: sounding ATAK's emergency alarm for the MAYDAY from ${place.sender}")
-        active.send(CotEvents.emergencyAlert(uid, about, place.sender, place.latitude, place.longitude, now, ALERT_STALE))
+        if (active.send(CotEvents.emergencyAlert(uid, about, place.sender, place.latitude, place.longitude, now, ALERT_STALE))) {
+            alerts[uid] = place
+            BridgeStatus.log("MECP: sounded ATAK's emergency alarm for the MAYDAY from ${place.sender}")
+        }
     }
 
-    private fun cancelAlert(active: TakServer, place: MeshPicture.MecpPlace, now: Instant) {
-        val uid = alertUid(place)
-        if (!alerted.remove(uid)) return
-        BridgeStatus.log("MECP: cancelling ATAK's emergency alert for ${place.sender}")
-        active.send(CotEvents.emergencyCancel(uid, place.sender, place.latitude, place.longitude, now))
+    /** Cancel one alert; it stays on the list, so a later cancel can try again, unless ATAK was sent the cancel. */
+    private fun cancelAlert(active: TakServer, uid: String, now: Instant) {
+        val place = alerts[uid] ?: return
+        if (active.send(CotEvents.emergencyCancel(uid, place.sender, place.latitude, place.longitude, now))) {
+            alerts.remove(uid)
+            BridgeStatus.log("MECP: cancelled ATAK's emergency alert for ${place.sender}")
+        }
+    }
+
+    /** "I am OK" from [sender]: cancel every alert raised for them, whatever marker it came from. */
+    private fun cancelAlertsFrom(active: TakServer, sender: String, now: Instant) {
+        for ((uid, place) in alerts.entries.toList()) if (place.sender == sender) cancelAlert(active, uid, now)
     }
 
     override fun onDirectResult(id: Long, publicKeyHex: String, text: String, outcome: DirectOutcome) {
