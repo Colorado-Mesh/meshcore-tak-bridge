@@ -20,6 +20,8 @@ What works:
 - The radio's battery on the bridge's screen and in its notification, with an alert at 20% and 10% that shows over ATAK. The percentage is estimated from a lithium cell's discharge curve, so as the battery runs down it reads lower than the MeshCore app's, which scales evenly from 3.0 V to 4.2 V: at 3.5 V the bridge says about 20% and the MeshCore app 42%.
 - Never writes to the radio's settings, channels, contacts or clock.
 
+Since 0.1.2, in test builds: [MECP](https://mecp.radio/) emergency messages, received on any channel or directly, are shown in English with the code line below, and one with coordinates becomes a map marker coloured by severity. ATAK's own emergency alarm for a real MAYDAY is available, off unless you turn it on. Sending MECP from ATAK is not built yet.
+
 ## Screenshots
 
 ATAK on a Galaxy Tab Active 3 with the bridge running: mesh nodes along Colorado's Front Range, with repeaters as installations and companion radios as team members, and every channel on the radio as a contact at the top of the list.
@@ -117,3 +119,5 @@ The app icon is the Colorado Mesh mark, with its arc closed into a map crosshair
 GPL-3.0-or-later. See [LICENSE](LICENSE).
 
 This project is not affiliated with MeshCore, the TAK Product Center, or TAK-MESHCORE. It contains no code from TAK-MESHCORE.
+
+The English MECP code table (`protocol/.../MecpCodes.kt`) is from the [MECP project](https://github.com/xiang-dev-1/MECP)'s `languages/en.json`, by the MECP contributors, licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The MECP protocol itself is CC0. This project is not affiliated with MECP.

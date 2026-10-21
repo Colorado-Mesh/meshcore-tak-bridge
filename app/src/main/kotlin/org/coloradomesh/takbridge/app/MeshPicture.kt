@@ -2,14 +2,18 @@ package org.coloradomesh.takbridge.app
 
 import org.coloradomesh.takbridge.cot.ChatSpec
 import org.coloradomesh.takbridge.cot.ClientIdentity
+import org.coloradomesh.takbridge.cot.CotEvents
 import org.coloradomesh.takbridge.cot.MarkerSpec
 import org.coloradomesh.takbridge.protocol.Channel
 import org.coloradomesh.takbridge.protocol.ChannelMessage
 import org.coloradomesh.takbridge.protocol.CompanionFrames
 import org.coloradomesh.takbridge.protocol.Contact
 import org.coloradomesh.takbridge.protocol.DirectMessage
+import org.coloradomesh.takbridge.protocol.Mecp
 import org.coloradomesh.takbridge.protocol.Position
 import org.coloradomesh.takbridge.protocol.SelfInfo
+import java.security.MessageDigest
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -44,6 +48,23 @@ class MeshPicture {
     private val fixes = ConcurrentHashMap<String, Fix>()
 
     private data class Fix(val position: Position, val atSeconds: Long)
+
+    /** MECP messages with a position, shown as spot markers until they expire, oldest first. Locked on itself. */
+    private val mecpMarks = LinkedHashMap<String, MecpMark>()
+
+    private data class MecpMark(
+        val uid: String,
+        val sender: String,
+        /** Where it was heard, such as "on #emergency". */
+        val where: String,
+        val message: Mecp.Message,
+        val latitude: Double,
+        val longitude: Double,
+        val heardAt: Long,
+    )
+
+    /** An MECP marker's uid and place, for raising or cancelling an ATAK alert about it. */
+    data class MecpPlace(val uid: String, val sender: String, val latitude: Double, val longitude: Double)
 
     /** Public keys of the companions being tracked. */
     @Volatile
@@ -110,6 +131,62 @@ class MeshPicture {
         fixes[publicKeyHex] = Fix(position, atSeconds)
     }
 
+    /**
+     * A received MECP message, from [sender], heard [where] ("on #emergency"). Returns where its
+     * marker is, or null when it has no position to show.
+     *
+     * Beacon messages (B01 active, B02 acknowledged, B03 cancelled) share one marker per sender,
+     * which moves as the beacon repeats and keeps its place when an update has no position. Any
+     * other message gets its own marker; a copy heard again lands on the same one.
+     */
+    fun putMecp(sender: String, where: String, message: Mecp.Message, nowSeconds: Long): MecpPlace? = synchronized(mecpMarks) {
+        val beacon = message.codes.any { it in BEACON_CODES }
+        val uid = if (beacon) "MECP-B-${digest(sender)}" else "MECP-${digest("$sender|${message.raw}")}"
+        val previous = mecpMarks.remove(uid)
+        val lat = message.latitude ?: previous?.latitude ?: return null
+        val lon = message.longitude ?: previous?.longitude ?: return null
+        mecpMarks[uid] = MecpMark(uid, sender, where, message, lat, lon, nowSeconds)
+        while (mecpMarks.size > MAX_MECP_MARKS) mecpMarks.remove(mecpMarks.keys.first())
+        MecpPlace(uid, sender, lat, lon)
+    }
+
+    /** "Ignore previous, sent in error" (D04): drop [sender]'s latest MECP marker, and say which it was. */
+    fun forgetLatestMecp(sender: String): MecpPlace? = synchronized(mecpMarks) {
+        val latest = mecpMarks.values.lastOrNull { it.sender == sender } ?: return null
+        mecpMarks.remove(latest.uid)
+        MecpPlace(latest.uid, latest.sender, latest.latitude, latest.longitude)
+    }
+
+    /** The companion whose name is [name], so an alert can name the node it is about. */
+    fun companionNamed(name: String): Contact? =
+        contacts.values.firstOrNull { it.type == Contact.TYPE_COMPANION && displayName(it) == name }
+
+    private fun mecpMarkers(nowSeconds: Long): List<MarkerSpec> = synchronized(mecpMarks) {
+        mecpMarks.values.removeAll { nowSeconds - it.heardAt >= lifetime(it.message).seconds }
+        mecpMarks.values.map { mark ->
+            val m = mark.message
+            val left = lifetime(m).minusSeconds(nowSeconds - mark.heardAt)
+            MarkerSpec(
+                uid = mark.uid,
+                cotType = CotEvents.SPOT_TYPE,
+                callsign = "${Mecp.headline(m)} ${mark.sender}",
+                latitude = mark.latitude,
+                longitude = mark.longitude,
+                colorArgb = if (m.isDrill) DRILL_COLOUR else SEVERITY_COLOURS[m.severity],
+                remarks = "${Mecp.describe(m)}\n${m.raw}\nFrom ${mark.sender} ${mark.where}, heard " +
+                    "${TIME.format(Instant.ofEpochSecond(mark.heardAt))} UTC, through MeshCore TAK Bridge",
+                staleAfter = if (left < Duration.ofMinutes(1)) Duration.ofMinutes(1) else left,
+            )
+        }
+    }
+
+    /** How long an MECP marker stays: a day for MAYDAY and URGENT, half a day for SAFETY, two hours for ROUTINE. */
+    private fun lifetime(message: Mecp.Message): Duration = MECP_LIFETIMES[message.severity]
+
+    private fun digest(text: String): String =
+        MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8))
+            .take(8).joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+
     /** Companions, for choosing which to track: public key and name, by name. */
     fun companions(): List<Pair<String, String>> =
         contacts.values.filter { it.type == Contact.TYPE_COMPANION }
@@ -138,6 +215,7 @@ class MeshPicture {
         contacts.clear()
         talkedTo.clear()
         fixes.clear()
+        synchronized(mecpMarks) { mecpMarks.clear() }
     }
 
     /** The companion a chat event from ATAK is for, going by the contact uid it was addressed to. */
@@ -288,6 +366,7 @@ class MeshPicture {
                 ),
             )
         }
+        list.addAll(mecpMarkers(nowSeconds))
         return list
     }
 
@@ -358,6 +437,15 @@ class MeshPicture {
         )
         const val DEFAULT_COMPANION_TEAM = "Cyan"
         private const val LOCK = "🔒"
+
+        /** MECP's beacon codes: active, acknowledged, cancelled. */
+        private val BEACON_CODES = setOf("B01", "B02", "B03")
+        private const val MAX_MECP_MARKS = 50
+        private val MECP_LIFETIMES = listOf(Duration.ofHours(24), Duration.ofHours(24), Duration.ofHours(12), Duration.ofHours(2))
+
+        /** Spot marker colours by severity, as ATAK's signed ARGB: red, orange, yellow, white; grey for drills. */
+        private val SEVERITY_COLOURS = listOf(0xFFFF0000.toInt(), 0xFFFF8C00.toInt(), 0xFFFFD700.toInt(), 0xFFFFFFFF.toInt())
+        private val DRILL_COLOUR = 0xFFA0A0A0.toInt()
         private const val MAX_ICON_PATH = 256
 
         /** True for `<set uid>/<group>/<file>` with nothing that could break out of an XML attribute. */

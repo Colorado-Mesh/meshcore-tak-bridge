@@ -30,6 +30,8 @@ data class MarkerSpec(
     val endpoint: String? = null,
     /** How long ATAK keeps the marker without a refresh. */
     val staleAfter: Duration = CotEvents.MARKER_STALE,
+    /** Colour as ATAK's signed ARGB integer, for markers such as spot markers that take one. */
+    val colorArgb: Int? = null,
 )
 
 /** One chat message in a GeoChat room. */
@@ -58,6 +60,13 @@ data class ChatSpec(
  */
 object CotEvents {
     /** ATAK hides a marker this long after it was sent unless a newer one arrives. */
+    /** ATAK's emergency alert and its cancel, as in ATAK's `EmergencyType`. */
+    const val EMERGENCY_TYPE = "b-a-o-tbl"
+    const val EMERGENCY_CANCEL_TYPE = "b-a-o-can"
+
+    /** ATAK's spot map marker, a coloured dot that takes a `color` detail. */
+    const val SPOT_TYPE = "b-m-p-s-m"
+
     val MARKER_STALE: Duration = Duration.ofMinutes(10)
     /** Chat stays in ATAK's history; stale only bounds how long servers relay it. */
     private val CHAT_STALE: Duration = Duration.ofHours(24)
@@ -107,6 +116,7 @@ object CotEvents {
         spec.iconsetPath?.let {
             detail.append("<usericon iconsetpath=\"").append(escapeXml(it)).append("\"/>")
         }
+        spec.colorArgb?.let { detail.append("<color argb=\"").append(it).append("\"/>") }
         spec.remarks?.let { detail.append("<remarks>").append(escapeXml(it)).append("</remarks>") }
         return "<event version=\"2.0\" uid=\"${escapeXml(spec.uid)}\" type=\"${escapeXml(spec.cotType)}\"" +
             " time=\"$t\" start=\"$t\" stale=\"${time(now.plus(spec.staleAfter))}\" how=\"m-g\">" +
@@ -162,6 +172,37 @@ object CotEvents {
             "</__chatreceipt>" +
             "<link uid=\"$from\" type=\"a-f-G-U-C\" relation=\"p-p\"/>" +
             "</detail>" +
+            "</event>"
+    }
+
+    /**
+     * ATAK's own emergency alert ("911 Alert"), which sounds ATAK's alarm and puts an alert
+     * marker at the position. Built like ATAK's (`EmergencyManager.generateInitiateMessage` in
+     * ATAK's source): type `b-a-o-tbl`, a `link` to who it is about, a callsign ending in
+     * "-Alert", and an `emergency` detail. ATAK alarms each time one arrives, so send it once.
+     */
+    fun emergencyAlert(uid: String, aboutUid: String, callsign: String, latitude: Double, longitude: Double, now: Instant, stale: Duration): String {
+        require(latitude in -90.0..90.0 && longitude in -180.0..180.0) { "alert position out of range" }
+        val t = time(now)
+        val name = escapeXml(callsign)
+        return "<event version=\"2.0\" uid=\"${escapeXml(uid)}\" type=\"$EMERGENCY_TYPE\"" +
+            " time=\"$t\" start=\"$t\" stale=\"${time(now.plus(stale))}\" how=\"m-g\">" +
+            "<point lat=\"${coordinate(latitude)}\" lon=\"${coordinate(longitude)}\" hae=\"$UNKNOWN\" ce=\"$UNKNOWN\" le=\"$UNKNOWN\"/>" +
+            "<detail>" +
+            "<link uid=\"${escapeXml(aboutUid)}\" type=\"a-f-G-U-C\" relation=\"p-p\"/>" +
+            "<contact callsign=\"$name-Alert\"/>" +
+            "<emergency type=\"911 Alert\">$name</emergency>" +
+            "</detail>" +
+            "</event>"
+    }
+
+    /** Cancels the alert [uid] from [emergencyAlert], as ATAK's own cancel does (`b-a-o-can`). */
+    fun emergencyCancel(uid: String, callsign: String, latitude: Double, longitude: Double, now: Instant): String {
+        val t = time(now)
+        return "<event version=\"2.0\" uid=\"${escapeXml(uid)}\" type=\"$EMERGENCY_CANCEL_TYPE\"" +
+            " time=\"$t\" start=\"$t\" stale=\"${time(now.plus(MARKER_STALE))}\" how=\"m-g\">" +
+            "<point lat=\"${coordinate(latitude)}\" lon=\"${coordinate(longitude)}\" hae=\"$UNKNOWN\" ce=\"$UNKNOWN\" le=\"$UNKNOWN\"/>" +
+            "<detail><emergency cancel=\"true\">${escapeXml(callsign)}</emergency></detail>" +
             "</event>"
     }
 

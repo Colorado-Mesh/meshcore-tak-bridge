@@ -29,6 +29,7 @@ import org.coloradomesh.takbridge.protocol.DeviceInfo
 import org.coloradomesh.takbridge.protocol.DirectMessage
 import org.coloradomesh.takbridge.protocol.DirectOutcome
 import org.coloradomesh.takbridge.protocol.LowBatteryWatch
+import org.coloradomesh.takbridge.protocol.Mecp
 import org.coloradomesh.takbridge.protocol.RadioBattery
 import org.coloradomesh.takbridge.protocol.SelfInfo
 import org.coloradomesh.takbridge.protocol.TelemetryOutcome
@@ -36,6 +37,7 @@ import org.coloradomesh.takbridge.takserver.ApiServer
 import org.coloradomesh.takbridge.takserver.TakServer
 import org.coloradomesh.takbridge.takserver.TakServerListener
 import java.io.IOException
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -434,22 +436,87 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
     private fun deliver(message: Any, atak: ClientIdentity) {
         when (message) {
             is ChannelMessage -> {
-                val line = mesh.chatLine(message, atak)
+                // An MECP message is shown decoded, with the code line kept below it.
+                val mecp = Mecp.find(message.text)
+                val shown = if (mecp == null) message else message.copy(text = mecpText(mecp))
+                val line = mesh.chatLine(shown, atak)
                 if (line == null) {
                     BridgeStatus.log("Radio: message on unknown channel ${message.channelIndex} ignored")
                     return
                 }
                 server?.send(CotEvents.geoChat(line, Instant.now()))
+                mecp?.let { onMecp(it.sender ?: "an unnamed sender", "on ${line.senderCallsign}", it.message) }
             }
             is DirectMessage -> {
                 val active = server ?: return
+                val contact = mesh.contactFor(message)
                 // The sender must be a contact ATAK can reach before a reply to it can work.
-                mesh.contactFor(message)?.let { contact ->
-                    if (mesh.noteTalkedTo(contact, Instant.now().epochSecond)) sendMeshMarkers(active, only = contact)
+                contact?.let {
+                    if (mesh.noteTalkedTo(it, Instant.now().epochSecond)) sendMeshMarkers(active, only = it)
                 }
-                active.send(CotEvents.geoChat(mesh.directLine(message, atak), Instant.now()))
+                val mecp = Mecp.find(message.text)
+                val shown = if (mecp == null) message else message.copy(text = mecpText(mecp))
+                active.send(CotEvents.geoChat(mesh.directLine(shown, atak), Instant.now()))
+                if (mecp != null) {
+                    val sender = contact?.let { mesh.displayName(it) } ?: message.senderPrefixHex.take(8)
+                    onMecp(sender, "in a direct message", mecp.message)
+                }
             }
         }
+    }
+
+    /** An MECP message as ATAK shows it: the sender, the message in English, and the code line below. */
+    private fun mecpText(found: Mecp.Received): String {
+        val from = found.sender?.let { "$it: " } ?: ""
+        return "$from${Mecp.describe(found.message)}\n${found.message.raw}"
+    }
+
+    /**
+     * A received MECP message: log it, put it on the map when it gives a position, and, when
+     * the user has chosen it, sound ATAK's emergency alarm for a real MAYDAY.
+     */
+    private fun onMecp(sender: String, where: String, message: Mecp.Message) {
+        BridgeStatus.log("MECP from $sender $where: ${Mecp.describe(message)}")
+        val active = server ?: return
+        val now = Instant.now()
+        if ("D04" in message.codes) {
+            // "Ignore previous, sent in error": take down the sender's latest marker and alert.
+            mesh.forgetLatestMecp(sender)?.let { place ->
+                cancelAlert(active, place, now)
+                sendMeshMarkers(active)
+            }
+            return
+        }
+        val place = mesh.putMecp(sender, where, message, now.epochSecond) ?: return
+        mesh.markers(now.epochSecond).firstOrNull { it.uid == place.uid }?.let {
+            active.send(CotEvents.marker(it, now))
+            onMap.add(it.uid)
+        }
+        when {
+            "B03" in message.codes -> cancelAlert(active, place, now)
+            message.severity == 0 && !message.isDrill && message.hasPosition && prefs().getBoolean(PREF_MECP_ALARM, false) ->
+                raiseAlert(active, place, now)
+        }
+    }
+
+    /** MECP markers ATAK has been alerted about, by the alert's uid, so each alarm sounds once. */
+    private val alerted: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    private fun alertUid(place: MeshPicture.MecpPlace) = "MECP-ALERT-${place.uid.removePrefix("MECP-")}"
+
+    private fun raiseAlert(active: TakServer, place: MeshPicture.MecpPlace, now: Instant) {
+        val uid = alertUid(place)
+        if (!alerted.add(uid)) return
+        val about = mesh.companionNamed(place.sender)?.let { mesh.markerUid(it) } ?: place.uid
+        BridgeStatus.log("MECP: sounding ATAK's emergency alarm for the MAYDAY from ${place.sender}")
+        active.send(CotEvents.emergencyAlert(uid, about, place.sender, place.latitude, place.longitude, now, ALERT_STALE))
+    }
+
+    private fun cancelAlert(active: TakServer, place: MeshPicture.MecpPlace, now: Instant) {
+        val uid = alertUid(place)
+        if (!alerted.remove(uid)) return
+        BridgeStatus.log("MECP: cancelling ATAK's emergency alert for ${place.sender}")
+        active.send(CotEvents.emergencyCancel(uid, place.sender, place.latitude, place.longitude, now))
     }
 
     override fun onDirectResult(id: Long, publicKeyHex: String, text: String, outcome: DirectOutcome) {
@@ -805,6 +872,12 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         const val ACTION_RELOAD_TRACKING = "org.coloradomesh.takbridge.RELOAD_TRACKING"
         const val PREF_TRACKED = "tracked_nodes"
         const val PREF_TRACK_MINUTES = "track_minutes"
+
+        /** Whether a real MAYDAY with a position sounds ATAK's emergency alarm; off unless chosen. */
+        const val PREF_MECP_ALARM = "mecp_alarm"
+
+        /** How long ATAK keeps an alert raised for an MECP MAYDAY, unless it is cancelled first. */
+        private val ALERT_STALE: Duration = Duration.ofHours(1)
 
         /** How often each tracked node is asked for its position, unless the user chooses otherwise. */
         const val DEFAULT_TRACK_MINUTES = 5
