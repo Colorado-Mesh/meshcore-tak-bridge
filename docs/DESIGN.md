@@ -283,7 +283,9 @@ Other choices:
 - **Unit tests.** `protocol` is tested with recorded byte frames and a scripted radio for the client's command queue; `cot` with expected events and parsing of what ATAK sends; `takserver` with a scripted client that connects, pings and exchanges chat.
 - **On-device checks.** Bluetooth and ATAK behaviour are checked by hand on a Pixel 9 Pro and a Galaxy Tab Active 3.
 
-Not yet in place: a written on-device checklist for releases, which is the first of the next steps (see "Development plan"), and a simulated radio that runs the whole bridge end to end on a computer.
+- **Release checklist.** Every release candidate is checked by hand against [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md) before it is tagged.
+
+Not yet in place: a simulated radio that runs the whole bridge end to end on a computer.
 
 ## Development plan
 
@@ -304,7 +306,7 @@ Not yet in place: a written on-device checklist for releases, which is the first
 
 Set on 20 October 2026, in this order. The aim now is wider use, so releases should stay dependable and new features should follow what users ask for.
 
-1. **A release test checklist.** A written list of checks on a device, about 15 minutes, run on every release candidate before it is tagged: connect and reconnect, markers and filters, channel and direct chat both ways, replies, receipts, battery, tracking, and installing over the previous release. It turns what has so far been checked from memory into a routine, and RELEASING.md will point to it.
+1. **A release test checklist.** Done 20 October 2026: [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md), checks on a device of about 15 to 20 minutes, run on every release candidate before it is tagged: connecting, ATAK, markers and filters, channel and direct chat both ways, replies, receipts, tracking, recovery, and installing over the previous release. It turns what had been checked from memory into a routine, and RELEASING.md points to it. First to be used on the next release.
 2. **Toolchain update.** The Gradle wrapper (8.11.1, which the release run reports as out of date) and the Android Gradle plugin, together, and the target and compile SDK from 34 to 36. Targeting Android 15 and later makes apps draw under the status bar, so the screen must make room for the system bars. The step is done only once a debug build has been checked on both test devices, the screen's layout included. This keeps CI current, and is also what Google Play would need (see "Open questions and risks").
 3. **Features chosen from what users report.** Candidates, with no order until issues show one: room server posts, which arrive as signed messages and are skipped for now; splitting messages too long for one MeshCore packet; and tidying replies, showing a received `@[Name]` as `@Name` and marking replies addressed to this radio.
 

@@ -91,7 +91,7 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
 
 The next steps, in order, are set out in [DESIGN.md](DESIGN.md) under "Development plan" (decided 2026-10-20):
 
-1. **A release test checklist** for devices, run on every release candidate.
+1. ~~A release test checklist~~ Done 2026-10-20: [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md), linked from RELEASING.md; first to be used on the next release.
 2. **Toolchain update:** Gradle wrapper (8.11.1 is out of date) and Android Gradle plugin together, target and compile SDK 34 to 36, and room for the system bars on the screen; checked with a debug build on a device.
 3. **Features chosen from users' reports:** room server posts, splitting long messages, and tidying replies (a received `@[Name]` shown as `@Name`, and replies to this radio marked). Per-person reply contacts were considered and set aside (2026-10-17): too much clutter in the contact list.
 
