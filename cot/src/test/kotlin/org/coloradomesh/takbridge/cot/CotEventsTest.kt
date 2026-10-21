@@ -155,4 +155,31 @@ class CotEventsTest {
         assertEquals("A☃", unescapeXml("&#65;&#x2603;"))
         assertEquals("x&nbsp;y", unescapeXml("x&nbsp;y"))
     }
+
+    @Test
+    fun aSpotMarkerCarriesItsColour() {
+        val spot = MarkerSpec("MECP-1", CotEvents.SPOT_TYPE, "MAYDAY Ann", 39.7, -105.0, colorArgb = -65536, remarks = "Injury")
+        val xml = CotEvents.marker(spot, now)
+        assertTrue(xml.contains("type=\"b-m-p-s-m\""))
+        assertTrue(xml.contains("<color argb=\"-65536\"/>"))
+        assertFalse(CotEvents.marker(marker(), now).contains("<color"))
+    }
+
+    @Test
+    fun anEmergencyAlertIsBuiltLikeAtaksOwn() {
+        val xml = CotEvents.emergencyAlert("MECP-ALERT-1", "MESHCORE-ab", "Ann <A>", 39.7, -105.0, now, java.time.Duration.ofHours(1))
+        assertTrue(xml.startsWith("<event version=\"2.0\" uid=\"MECP-ALERT-1\" type=\"b-a-o-tbl\""))
+        assertTrue(xml.contains("stale=\"2026-10-11T13:00:00Z\""))
+        assertTrue(xml.contains("<link uid=\"MESHCORE-ab\" type=\"a-f-G-U-C\" relation=\"p-p\"/>"))
+        assertTrue(xml.contains("<contact callsign=\"Ann &lt;A&gt;-Alert\"/>"))
+        assertTrue(xml.contains("<emergency type=\"911 Alert\">Ann &lt;A&gt;</emergency>"))
+        assertTrue(xml.contains("lat=\"39.700000\" lon=\"-105.000000\""))
+    }
+
+    @Test
+    fun anEmergencyCancelUsesTheSameUid() {
+        val xml = CotEvents.emergencyCancel("MECP-ALERT-1", "Ann", 39.7, -105.0, now)
+        assertTrue(xml.contains("uid=\"MECP-ALERT-1\" type=\"b-a-o-can\""))
+        assertTrue(xml.contains("<emergency cancel=\"true\">Ann</emergency>"))
+    }
 }

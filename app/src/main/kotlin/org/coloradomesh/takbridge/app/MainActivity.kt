@@ -100,6 +100,7 @@ class MainActivity : Activity() {
         column.addView(radioList, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         column.addView(filterSection(pad), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         column.addView(trackingSection(pad), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        column.addView(mecpSection(pad), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         column.addView(iconSection(pad), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         column.addView(setupView, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         column.addView(aboutSection(pad), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
@@ -392,6 +393,35 @@ class MainActivity : Activity() {
             visibility = View.GONE
         }
         section.addView(trackingView, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        return section
+    }
+
+    /** MECP emergency messages: what the bridge does with them, and the opt-in for ATAK's alarm. */
+    private fun mecpSection(pad: Int): LinearLayout {
+        val prefs = getSharedPreferences(BridgeService.PREFS, MODE_PRIVATE)
+        val section = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, pad, 0, 0)
+        }
+        section.addView(TextView(this).apply { text = "MECP emergency messages" })
+        section.addView(
+            TextView(this).apply {
+                textSize = 12f
+                setPadding(0, dp(4), 0, dp(4))
+                text = MECP_TEXT
+            },
+        )
+        section.addView(
+            CheckBox(this).apply {
+                text = "Sound ATAK's emergency alarm for a MAYDAY with a position (not drills)"
+                isChecked = prefs.getBoolean(BridgeService.PREF_MECP_ALARM, false)
+                buttonTintList = checkboxTint()
+                setOnCheckedChangeListener { _, checked ->
+                    prefs.edit().putBoolean(BridgeService.PREF_MECP_ALARM, checked).apply()
+                    BridgeStatus.log(if (checked) "MECP: a MAYDAY with a position will sound ATAK's alarm" else "MECP: ATAK's alarm off for MECP")
+                }
+            },
+        )
         return section
     }
 
@@ -698,6 +728,7 @@ class MainActivity : Activity() {
             MeshCore TAK Bridge is free software from Colorado Mesh, licensed GPL-3.0-or-later.
             Bug reports, ideas and code are welcome on GitHub.
             Not affiliated with MeshCore or the TAK Product Center.
+            MECP code table by the MECP contributors (mecp.radio), CC BY 4.0.
         """.trimIndent()
 
         val TYPE_LABELS = listOf(
@@ -706,6 +737,10 @@ class MainActivity : Activity() {
             Contact.TYPE_ROOM_SERVER to "Room servers",
             Contact.TYPE_SENSOR to "Sensors",
         )
+
+        val MECP_TEXT = "MECP messages (mecp.radio) are shown in English, with the code line below. One with " +
+            "coordinates also becomes a marker: red for MAYDAY, orange for URGENT, yellow for SAFETY, white for " +
+            "ROUTINE, grey for drills. Anyone on a channel can send one, so ATAK's alarm is off unless you turn it on."
 
         /** How often each tracked companion can be asked for its position, in minutes. */
         val TRACK_MINUTE_CHOICES = listOf(2, 5, 10, 15, 30)
