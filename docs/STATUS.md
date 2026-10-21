@@ -89,9 +89,13 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
 
 ## Still to do
 
-1. Possibly: room server posts, which arrive as signed messages and are skipped for now.
-2. **Replies, next steps** (see "Replies on a channel" above): tidy received `@[Name]` to `@Name` in ATAK, and possibly mark a reply addressed to this radio's name so it stands out on a busy channel. Per-person reply contacts in ATAK were considered and set aside (2026-10-17): too much clutter in the contact list.
-3. Housekeeping: the release run notes that Gradle 8.11.1 is out of date. Update the wrapper and the Android Gradle plugin together, in their own pull request, and check a debug build on a device.
+The next steps, in order, are set out in [DESIGN.md](DESIGN.md) under "Development plan" (decided 2026-10-20):
+
+1. **A release test checklist** for devices, run on every release candidate.
+2. **Toolchain update:** Gradle wrapper (8.11.1 is out of date) and Android Gradle plugin together, target and compile SDK 34 to 36, and room for the system bars on the screen; checked with a debug build on a device.
+3. **Features chosen from users' reports:** room server posts, splitting long messages, and tidying replies (a received `@[Name]` shown as `@Name`, and replies to this radio marked). Per-person reply contacts were considered and set aside (2026-10-17): too much clutter in the contact list.
+
+Google Play is not planned until the app is in wider use (2026-10-20); DESIGN.md lists what it will take.
 
 In Claude cloud sessions, `./gradlew` cannot fetch Gradle or dependencies. The plain modules' tests can still be run with the Kotlin compiler and JUnit bundled in a local Gradle install. The app is only compiled in CI. Claude cannot push to the Colorado Mesh organisation yet (the Claude GitHub App is not installed there), so its changes come as patch files that a maintainer applies with `git am` and opens as a pull request.
 
