@@ -100,7 +100,9 @@ The secrets must be **environment** secrets on `release`, not repository secrets
 ## Making a release
 
 1. **Pick the build.** A CI build of `main` that has run on devices without problems, ideally
-   overnight. Name it as the release candidate at the top of [STATUS.md](STATUS.md).
+   overnight. Run the [release test checklist](RELEASE-CHECKLIST.md) on it, and copy the ticked
+   list into the version pull request in step 2. Name it as the release candidate at the top of
+   [STATUS.md](STATUS.md).
 2. **Set the version** in `app/build.gradle.kts`, by pull request: `versionName` is what people see
    (`0.1.0`, `0.1.1`, `0.2.0`); `versionCode` must go up by at least 1 for every release, or phones
    will not take it as an update. Check the last release below for the numbers to go up from.
@@ -119,7 +121,7 @@ The secrets must be **environment** secrets on `release`, not repository secrets
    fingerprint: it must match the one noted in step 1.
 6. **Install it from the draft** on a test device. It installs over the previous release and keeps
    its settings. If a debug build is installed, uninstall that first, since debug builds are signed
-   with a different key.
+   with a different key. Section 9 of the checklist covers this.
 7. **Publish** the draft on GitHub (edit the notes if you like). Then record the release in
    [STATUS.md](STATUS.md).
 

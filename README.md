@@ -78,7 +78,7 @@ Requires JDK 17 (Gradle fetches it if missing) and, for the app, the Android SDK
 ./gradlew assembleDebug   # app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Every pull request and every push to `main` runs the tests and builds the debug APK in GitHub Actions. Signed releases are built from version tags; see [docs/RELEASING.md](docs/RELEASING.md).
+Every pull request and every push to `main` runs the tests and builds the debug APK in GitHub Actions. Signed releases are built from version tags, after the candidate has passed the [release test checklist](docs/RELEASE-CHECKLIST.md) on a device; see [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Contributing
 
