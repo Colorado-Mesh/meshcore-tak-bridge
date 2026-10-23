@@ -1,0 +1,3 @@
+[submodule "meshcore-kotlin"]
+	path = meshcore-kotlin
+	url = https://github.com/Colorado-Mesh/meshcore-kotlin.git
