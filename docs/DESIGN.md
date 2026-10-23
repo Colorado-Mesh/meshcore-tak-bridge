@@ -60,7 +60,7 @@ flowchart LR
     radio["MeshCore radio<br/>LoRa mesh link"]
     subgraph app["MeshCore TAK Bridge app"]
         direction TB
-        ble["Bluetooth link (app/ble)<br/>one step at a time, time limits, reconnect"]
+        ble["Bluetooth link (meshcore-kotlin)<br/>one step at a time, time limits, reconnect"]
         protocol["Companion client (protocol)<br/>command queue, frames encoded and decoded"]
         bridge["Mesh picture (app)<br/>nodes, channels, filters, styling"]
         server["Local TAK server (takserver, cot)<br/>CoT stream on 127.0.0.1"]
@@ -93,7 +93,7 @@ The Bluetooth layer (`GattLink`) is hand-written against Android's own API rathe
 
 ### Companion protocol
 
-The `CompanionClient` in the `protocol` module runs the conversation once the link is ready. Commands wait in a queue, one is outstanding at a time, and each has a 6 s time limit.
+The `CompanionClient` in the shared protocol module (the `meshcore-kotlin` submodule) runs the conversation once the link is ready. Commands wait in a queue, one is outstanding at a time, and each has a 6 s time limit.
 
 1. App start: the reply gives the radio's name and radio settings.
 2. Device query: the reply gives the firmware version, model and the number of channel slots.
@@ -215,7 +215,7 @@ Adverts carry a position, but a companion adverts only when its owner triggers i
 
 [MECP](https://mecp.radio/), the Mesh Emergency Communication Protocol, writes emergency and everyday messages as short codes, so that they can be read in any language: `MECP/<severity>/<codes> [free text]`, for example `MECP/0/M01 M07 2pax P05 48.6520,20.1305`. There are 4 severities (0 MAYDAY, 1 URGENT, 2 SAFETY, 3 ROUTINE) and 108 codes in 12 categories (protocol 1.1). It is plain text, so it travels on any MeshCore channel unchanged. The bridge reads it; sending it from ATAK is not built yet (decided 21 October 2026: the receiving side first).
 
-- **Reading.** `Mecp.parse` in the `protocol` module follows the MECP project's reference decoder (`engine/src/decoder.ts`) step by step: the case-sensitive `MECP/` prefix, a severity from 0 to 3, codes (a letter and two digits) until the first token that is not one, then free text, from which it takes `Npax` (people), `lat,lon`, `@HHMM` (UTC time), `@xx` (language), `~CALL` (callsign), `#tag` (incident) and, after `R03`, an ETA in minutes. D01 and D02 make it a drill. Anything that is not MECP, including a bad severity, is shown exactly as it arrived. Known codes that appear after the free text has begun (MECP's own example `M01 M07 2pax P05 …`) are shown with their meaning but, as in the reference decoder, are not counted as codes.
+- **Reading.** `Mecp.parse` in the shared protocol module follows the MECP project's reference decoder (`engine/src/decoder.ts`) step by step: the case-sensitive `MECP/` prefix, a severity from 0 to 3, codes (a letter and two digits) until the first token that is not one, then free text, from which it takes `Npax` (people), `lat,lon`, `@HHMM` (UTC time), `@xx` (language), `~CALL` (callsign), `#tag` (incident) and, after `R03`, an ETA in minutes. D01 and D02 make it a drill. Anything that is not MECP, including a bad severity, is shown exactly as it arrived. Known codes that appear after the free text has begun (MECP's own example `M01 M07 2pax P05 …`) are shown with their meaning but, as in the reference decoder, are not counted as codes.
 - **In ATAK's chat.** A channel or direct message that is MECP is shown in English, with the code line kept below it, so it can be checked or passed on: `Silver Eagle: 🆘 MAYDAY: Injury · Fracture / immobile · At GPS coordinates · 2 people · 48.6520, 20.1305`, then `MECP/0/M01 M07 2pax P05 48.6520,20.1305`. A drill starts with DRILL. An unknown code is named ("unknown code Q99"), not dropped. The English table is the MECP project's `languages/en.json` (CC BY 4.0, credited in the README).
 - **On the map.** A message with coordinates becomes an ATAK spot marker there, coloured by severity (red MAYDAY, orange URGENT, yellow SAFETY, white ROUTINE; grey for a drill), labelled with the severity and sender, with the English text, the code line, where it was heard and when in its remarks. It stays a day for MAYDAY and URGENT, half a day for SAFETY and two hours for ROUTINE. At most 50 are kept; past that the least serious goes first (drills, then ROUTINE, up to MAYDAY, oldest first among equals), so a flood of chatter cannot push a real emergency off the map. A copy heard again lands on the same marker. An active beacon (B01) has one marker per sender, which moves as the beacon repeats. A beacon acknowledgement (B02) comes from whoever answers it, so it is an ordinary message with a marker of its own.
 - **Who sent it.** A channel message's sender is only the name written in front of it, and anyone on the channel can write any name; MeshCore does not sign channel messages. A direct message's sender is the contact whose key it was encrypted with, so the radio knows who it is. A cancel is therefore acted on only from a direct message: "I am OK" (B03) turns the sender's beacon marker into the cancel, in place, and cancels their ATAK alerts; "sent in error" (D04) takes down their latest marker and its alert. The same cancel on a channel is shown in the chat but only noted on the marker it would have cancelled ("not acted on"), which stays as it was. Found by CodeRabbit on pull request #26. Nothing can stop a false MAYDAY under someone else's name; the marker says which channel it came from.
@@ -271,12 +271,12 @@ The app is written in Kotlin, split so that most of the logic is plain code with
 
 | Module | Contents | Depends on Android |
 | --- | --- | --- |
-| `protocol` | MeshCore companion frames, and the client that runs the command queue | No |
+| `meshcore-kotlin` | A git submodule shared with WearMesh: `protocol`, MeshCore companion frames and the client that runs the command queue (no Android); `ble`, the Bluetooth link and scanner (Android) | `protocol` no, `ble` yes |
 | `cot` | Build and parse CoT events: markers, contacts, GeoChat, deletes, ping and pong; stream framing | No |
 | `takserver` | Loopback TCP server, inbound chat, rate limit; minimal web API answer on port 8080 | No |
-| `app` | Bluetooth link and scanner (`ble/`), the mesh picture, the foreground service, the status and settings screen | Yes |
+| `app` | The mesh picture, the foreground service, the status and settings screen | Yes |
 
-The proposal had separate `bridge` and `ble` modules. In practice the mapping (`MeshPicture`) and the Bluetooth code sit in `app`; the mapping could move into a plain module if it grows tests of its own.
+The proposal had separate `bridge` and `ble` modules. In practice the mapping (`MeshPicture`) sits in `app`; it could move into a plain module if it grows tests of its own. The protocol module and the Bluetooth code began here and moved to the shared `meshcore-kotlin` repository in October 2026, when WearMesh needed them too; the bridge includes it as a submodule and builds it from source.
 
 Other choices:
 
@@ -284,13 +284,13 @@ Other choices:
 - **Background running:** a foreground service with a persistent notification. The Tab Active 3 held the radio link overnight without being stopped by power saving.
 - **Interface:** built in code, with no layout resources. The screen opens with a Colorado Mesh header (navy, the app icon, name and version, over a red-to-yellow line like the logo's arc) and ends with an About section linking to the source code and coloradomesh.org.
 - **Icon:** an adaptive icon, with a themed version and a matching status bar icon: the Colorado Mesh mark, its arc closed into a map crosshair, in the Colorado Mesh colours. It uses no ATAK or TAK artwork, since the project is not affiliated with the TAK Product Center. `docs/icon/make_icon.py` writes the vector drawables and a preview from one description.
-- **Application ID:** `org.coloradomesh.takbridge`, from the organisation's domain; the Kotlin packages share it.
+- **Application ID:** `org.coloradomesh.takbridge`, from the organisation's domain; the bridge's Kotlin packages share it. The shared code uses `org.coloradomesh.meshcore`.
 - **Licence:** GPL-3.0-or-later, matching the Colorado Mesh desktop client.
 - **Builds:** changes arrive by pull request. Each pull request and each push to `main` runs the tests and builds a debug APK in GitHub Actions; CodeQL also checks each pull request. A version tag (`v0.1.0`) runs the release workflow, which signs the APK with the release key and drafts a GitHub Release ([RELEASING.md](RELEASING.md)).
 
 ## Testing
 
-- **Unit tests.** `protocol` is tested with recorded byte frames and a scripted radio for the client's command queue; `cot` with expected events and parsing of what ATAK sends; `takserver` with a scripted client that connects, pings and exchanges chat.
+- **Unit tests.** The shared protocol module is tested with recorded byte frames and a scripted radio for the client's command queue, in meshcore-kotlin's own CI; `cot` with expected events and parsing of what ATAK sends; `takserver` with a scripted client that connects, pings and exchanges chat.
 - **On-device checks.** Bluetooth and ATAK behaviour are checked by hand on a Pixel 9 Pro and a Galaxy Tab Active 3.
 
 - **Release checklist.** Every release candidate is checked by hand against [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md) before it is tagged.

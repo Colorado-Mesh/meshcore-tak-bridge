@@ -50,19 +50,12 @@ reviews:
         messages. When a pull request changes behaviour, check that docs/STATUS.md and
         docs/DESIGN.md (and the README, if users would notice) are updated to match.
 
-    - path: "protocol/**"
+    - path: "meshcore-kotlin"
       instructions: |
-        MeshCore companion protocol: frame encoding and decoding, and the client that runs the
-        conversation with the radio. Everything from the radio is untrusted: check every length
-        and offset before reading, and never let a malformed frame throw out of the client.
-        One command is outstanding at a time, each with a time limit; check that a queued
-        command cannot stall the queue. The only commands the bridge sends are reads
-        (app start, device query, contacts, channels, waiting messages, battery), the two
-        send-text commands, and the telemetry request used for tracking; flag anything that sets, adds, removes or resets state on the radio.
-        Undocumented layouts come from the MeshCore firmware source (MyMesh.cpp,
-        BaseChatMesh.cpp); ask for a reference when a new one appears. ChannelReplies turns
-        "@name" and "@@" into MeshCore's "@[Name]" reply form and must never guess between
-        several matching names.
+        A git submodule: the MeshCore protocol and Bluetooth link, shared with WearMesh and
+        reviewed in Colorado-Mesh/meshcore-kotlin. Here only its pinned commit changes. Check
+        that a pull request moving it says what changed there and why the bridge needs it, and
+        that the bridge's use of any changed API (RadioSession, CompanionClient) still fits.
 
     - path: "cot/**"
       instructions: |
@@ -81,19 +74,13 @@ reviews:
         design and kept alive by ATAK's pings); that threads do not leak; and that the web API
         never returns real data or claims a TAK Server API version.
 
-    - path: "app/src/main/kotlin/**/ble/**"
-      instructions: |
-        Bluetooth LE link to the radio. All work runs on the link's own handler thread. Check
-        that each step clears its time limit, that close() is safe to call more than once, that
-        callbacks from a superseded connection attempt are ignored, and that a failure always
-        ends in onClosed with a reason. Samsung devices often fail a first connection with
-        status 133, which is why connecting is retried.
-
     - path: "app/src/main/**"
       instructions: |
         The Android app: minSdk 26, targetSdk 34. Flag APIs newer than 26 without a version
         check, work on the wrong thread (network off the main thread, views only on it), and
-        state shared between the radio, server and main threads without synchronisation.
+        state shared between the radio, server and main threads without synchronisation. The
+        Bluetooth link and protocol client come from the meshcore-kotlin submodule; their
+        callbacks arrive on the link's thread.
         The screen is built in code; the only resources are the icons.
 
     - path: "**/src/test/**"

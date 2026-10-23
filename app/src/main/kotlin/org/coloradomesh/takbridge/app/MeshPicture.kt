@@ -1,17 +1,17 @@
 package org.coloradomesh.takbridge.app
 
+import org.coloradomesh.meshcore.protocol.Channel
+import org.coloradomesh.meshcore.protocol.ChannelMessage
+import org.coloradomesh.meshcore.protocol.CompanionFrames
+import org.coloradomesh.meshcore.protocol.Contact
+import org.coloradomesh.meshcore.protocol.DirectMessage
+import org.coloradomesh.meshcore.protocol.Mecp
+import org.coloradomesh.meshcore.protocol.Position
+import org.coloradomesh.meshcore.protocol.SelfInfo
 import org.coloradomesh.takbridge.cot.ChatSpec
 import org.coloradomesh.takbridge.cot.ClientIdentity
 import org.coloradomesh.takbridge.cot.CotEvents
 import org.coloradomesh.takbridge.cot.MarkerSpec
-import org.coloradomesh.takbridge.protocol.Channel
-import org.coloradomesh.takbridge.protocol.ChannelMessage
-import org.coloradomesh.takbridge.protocol.CompanionFrames
-import org.coloradomesh.takbridge.protocol.Contact
-import org.coloradomesh.takbridge.protocol.DirectMessage
-import org.coloradomesh.takbridge.protocol.Mecp
-import org.coloradomesh.takbridge.protocol.Position
-import org.coloradomesh.takbridge.protocol.SelfInfo
 import java.security.MessageDigest
 import java.time.Duration
 import java.time.Instant

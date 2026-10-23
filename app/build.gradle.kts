@@ -53,5 +53,6 @@ kotlin {
 dependencies {
     implementation(project(":cot"))
     implementation(project(":takserver"))
-    implementation(project(":protocol"))
+    // Brings in org.coloradomesh.meshcore:protocol too.
+    implementation("org.coloradomesh.meshcore:ble")
 }

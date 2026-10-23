@@ -31,10 +31,10 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import org.coloradomesh.takbridge.R
-import org.coloradomesh.takbridge.app.ble.FoundRadio
-import org.coloradomesh.takbridge.app.ble.RadioScanner
-import org.coloradomesh.takbridge.protocol.Contact
-import org.coloradomesh.takbridge.protocol.RadioBattery
+import org.coloradomesh.meshcore.ble.FoundRadio
+import org.coloradomesh.meshcore.ble.RadioScanner
+import org.coloradomesh.meshcore.protocol.Contact
+import org.coloradomesh.meshcore.protocol.RadioBattery
 import org.coloradomesh.takbridge.takserver.TakServer
 
 /**
