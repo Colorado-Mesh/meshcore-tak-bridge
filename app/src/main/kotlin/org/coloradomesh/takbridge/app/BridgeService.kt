@@ -15,24 +15,24 @@ import android.os.Handler
 import android.os.Looper
 import android.os.IBinder
 import org.coloradomesh.takbridge.R
-import org.coloradomesh.takbridge.app.ble.RadioSession
+import org.coloradomesh.meshcore.ble.RadioSession
 import org.coloradomesh.takbridge.cot.ClientIdentity
 import org.coloradomesh.takbridge.cot.CotEvents
 import org.coloradomesh.takbridge.cot.CotParser
 import org.coloradomesh.takbridge.cot.InboundChat
-import org.coloradomesh.takbridge.protocol.Channel
-import org.coloradomesh.takbridge.protocol.ChannelMessage
-import org.coloradomesh.takbridge.protocol.ChannelReplies
-import org.coloradomesh.takbridge.protocol.CompanionClient
-import org.coloradomesh.takbridge.protocol.Contact
-import org.coloradomesh.takbridge.protocol.DeviceInfo
-import org.coloradomesh.takbridge.protocol.DirectMessage
-import org.coloradomesh.takbridge.protocol.DirectOutcome
-import org.coloradomesh.takbridge.protocol.LowBatteryWatch
-import org.coloradomesh.takbridge.protocol.Mecp
-import org.coloradomesh.takbridge.protocol.RadioBattery
-import org.coloradomesh.takbridge.protocol.SelfInfo
-import org.coloradomesh.takbridge.protocol.TelemetryOutcome
+import org.coloradomesh.meshcore.protocol.Channel
+import org.coloradomesh.meshcore.protocol.ChannelMessage
+import org.coloradomesh.meshcore.protocol.ChannelReplies
+import org.coloradomesh.meshcore.protocol.CompanionClient
+import org.coloradomesh.meshcore.protocol.Contact
+import org.coloradomesh.meshcore.protocol.DeviceInfo
+import org.coloradomesh.meshcore.protocol.DirectMessage
+import org.coloradomesh.meshcore.protocol.DirectOutcome
+import org.coloradomesh.meshcore.protocol.LowBatteryWatch
+import org.coloradomesh.meshcore.protocol.Mecp
+import org.coloradomesh.meshcore.protocol.RadioBattery
+import org.coloradomesh.meshcore.protocol.SelfInfo
+import org.coloradomesh.meshcore.protocol.TelemetryOutcome
 import org.coloradomesh.takbridge.takserver.ApiServer
 import org.coloradomesh.takbridge.takserver.TakServer
 import org.coloradomesh.takbridge.takserver.TakServerListener
@@ -316,7 +316,14 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         pendingOpen = null
         if (wanted != address) return
         var session: RadioSession? = null
-        session = RadioSession(applicationContext, address, this) { reason ->
+        session = RadioSession(
+            context = applicationContext,
+            address = address,
+            listener = this,
+            appName = APP_NAME,
+            onLog = { BridgeStatus.log("Radio: $it") },
+            onLinkReady = { _ -> BridgeStatus.update { status -> status.copy(radio = "Radio linked; reading it…") } },
+        ) { reason ->
             main.post { if (radio === session) onRadioLost(reason) }
         }
         radio = session
@@ -901,6 +908,9 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
 
         /** Whether a real MAYDAY with a position sounds ATAK's emergency alarm; off unless chosen. */
         const val PREF_MECP_ALARM = "mecp_alarm"
+
+        /** The name the bridge gives the radio when it says hello, as before the shared code. */
+        private const val APP_NAME = "TAKBridge"
 
         /** How long ATAK keeps an alert raised for an MECP MAYDAY, unless it is cancelled first. */
         private val ALERT_STALE: Duration = Duration.ofHours(1)

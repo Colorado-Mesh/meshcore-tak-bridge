@@ -23,5 +23,8 @@ rootProject.name = "meshcore-tak-bridge"
 
 include(":cot")
 include(":takserver")
-include(":protocol")
 include(":app")
+
+// The MeshCore protocol and Bluetooth link, shared with WearMesh. A git submodule, built from
+// source as part of this build: run `git submodule update --init` after cloning.
+includeBuild("meshcore-kotlin")
