@@ -401,6 +401,21 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         server?.let { active -> sendMeshMarkers(active, only = contact) }
     }
 
+    /**
+     * The radio linked but never answered the start-up commands, even after the library's retries,
+     * and nothing more will be sent on this link. Drop it and try again, as for a lost link.
+     * Only before start-up has finished: once channels are read, the radio is up.
+     */
+    override fun onStartUpFailed(what: String) {
+        BridgeStatus.log("Radio: no answer to $what at start-up; reconnecting")
+        main.post {
+            val session = radio ?: return@post
+            if (radioUp) return@post
+            onRadioLost("the radio did not answer $what")
+            session.close()
+        }
+    }
+
     override fun onChannels(channels: List<Channel>) {
         mesh.setChannels(channels)
         radioUp = true

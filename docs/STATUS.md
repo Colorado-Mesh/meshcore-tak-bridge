@@ -1,6 +1,6 @@
 # Project status
 
-Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2026-10-20.
+Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2026-11-15.
 
 **Repository:** moved from RobertMTalbot/meshcore-tak-bridge to [Colorado-Mesh/meshcore-tak-bridge](https://github.com/Colorado-Mesh/meshcore-tak-bridge) on 2026-10-13. GitHub redirects the old address, but clones should point their remote at the new one.
 
@@ -21,7 +21,7 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
   - The packet size request may go unanswered without stalling the link.
   - **A radio connects on the first tap** (checked on build #43, 13 October). See "Design decisions learned on devices" for why it used to need several.
   - Connecting waits a moment after a scan and tries up to 3 times, 12 s each, since Android often fails a first try with status 133. Tapping the radio already being connected does not start over, and the scan list is cleared once a connection is under way.
-- **Remembers the chosen radio** and reconnects after a drop, retrying after 3, 5, 10, 20, 30, then every 60 seconds.
+- **Remembers the chosen radio** and reconnects after a drop, retrying after 3, 5, 10, 20, 30, then every 60 seconds. Since 2026-11-15 it also reconnects when a radio links but never answers the start-up commands (the library tries them again first), rather than waiting on a link that will deliver nothing.
   - The Tab Active 3 held the link overnight with no power-saving problems, on an early build and again on build #31.
 - **Answers ATAK's connect-time web requests** on `127.0.0.1:8080` (server contacts, groups, feeds, mission invitations, profiles) with empty replies, so ATAK shows no server errors. Only the two version requests stay unanswered, by design.
   - Mission invitations were added 2026-10-16 after 0.1.0 showed "Failed to get invitations from all … (404)" for a while after ATAK connected. Checked on a device, 2026-10-17.
@@ -67,6 +67,7 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
   - Opt-in on the bridge's screen: a real MAYDAY with a position also sounds ATAK's emergency alarm, once.
   - Cancels (B03 "I am OK", D04 "sent in error") are acted on only from a direct message, whose sender the radio knows. On a channel anyone can write any name in front of a message, so there a cancel is only noted on the marker it names (CodeRabbit, pull request #26).
   - Decided 2026-10-21: receiving first; sending MECP from ATAK later. English only for now; the MECP table comes in 20 languages.
+  - Updated 2026-11-15 to MECP 1.3.0 (meshcore-kotlin #11): ETAs in any unit (`R03 45min`, as mesh-client sends them), new code M16, a good position after a bad one is found, and the sender's language is shown. When sending is built, ETAs must be written with no space (`45min`, `1h30min`), as 1.3.0 requires.
 - **No channel echoes** (checked 2026-10-12). A channel message sent from ATAK did not come back: the `Echo check:` log line never appeared. This matches the firmware, which marks its own flooded packets as seen. The guard stays in place: a received channel message matching one just sent from ATAK (`"<radio name>: <text>"`, same channel, within 15 minutes) is dropped and logged.
 - **Never writes to the radio's settings, channels, contacts or clock.**
 - **Colorado Mesh branding** (checked on a device, 13 October):
