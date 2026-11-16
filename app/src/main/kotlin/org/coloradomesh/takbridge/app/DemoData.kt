@@ -1,7 +1,7 @@
 package org.coloradomesh.takbridge.app
 
-import org.coloradomesh.takbridge.cot.ChatSpec
-import org.coloradomesh.takbridge.cot.MarkerSpec
+import org.coloradomesh.meshcore.tak.ChatSpec
+import org.coloradomesh.meshcore.tak.MarkerSpec
 import java.time.Instant
 import java.util.UUID
 

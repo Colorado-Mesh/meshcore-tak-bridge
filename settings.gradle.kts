@@ -21,7 +21,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "meshcore-tak-bridge"
 
-include(":cot")
 include(":takserver")
 include(":app")
 

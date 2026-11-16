@@ -1,10 +1,10 @@
 package org.coloradomesh.takbridge.takserver
 
-import org.coloradomesh.takbridge.cot.CotEvents
-import org.coloradomesh.takbridge.cot.CotFrameTooLargeException
-import org.coloradomesh.takbridge.cot.CotFramer
-import org.coloradomesh.takbridge.cot.CotParser
-import org.coloradomesh.takbridge.cot.InboundChat
+import org.coloradomesh.meshcore.tak.CotEvents
+import org.coloradomesh.meshcore.tak.CotFrameTooLargeException
+import org.coloradomesh.meshcore.tak.CotFramer
+import org.coloradomesh.meshcore.tak.CotParser
+import org.coloradomesh.meshcore.tak.InboundChat
 import java.io.IOException
 import java.io.OutputStream
 import java.net.InetAddress

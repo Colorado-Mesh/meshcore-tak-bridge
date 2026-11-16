@@ -271,12 +271,11 @@ The app is written in Kotlin, split so that most of the logic is plain code with
 
 | Module | Contents | Depends on Android |
 | --- | --- | --- |
-| `meshcore-kotlin` | A git submodule shared with WearMesh: `protocol`, MeshCore companion frames and the client that runs the command queue (no Android); `ble`, the Bluetooth link and scanner (Android) | `protocol` no, `ble` yes |
-| `cot` | Build and parse CoT events: markers, contacts, GeoChat, deletes, ping and pong; stream framing | No |
+| `meshcore-kotlin` | A git submodule shared with WearMesh and the WearTAK plugin: `protocol`, MeshCore companion frames and the client that runs the command queue (no Android); `ble`, the Bluetooth link and scanner (Android); `tak`, building and parsing CoT events (markers, contacts, GeoChat, deletes, ping and pong; stream framing) and the mesh picture (no Android) | `protocol` and `tak` no, `ble` yes |
 | `takserver` | Loopback TCP server, inbound chat, rate limit; minimal web API answer on port 8080 | No |
-| `app` | The mesh picture, the foreground service, the status and settings screen | Yes |
+| `app` | The foreground service, the status and settings screen | Yes |
 
-The proposal had separate `bridge` and `ble` modules. In practice the mapping (`MeshPicture`) sits in `app`; it could move into a plain module if it grows tests of its own. The protocol module and the Bluetooth code began here and moved to the shared `meshcore-kotlin` repository in October 2026, when WearMesh needed them too; the bridge includes it as a submodule and builds it from source.
+The proposal had separate `bridge` and `ble` modules. The protocol module and the Bluetooth code began here and moved to the shared `meshcore-kotlin` repository in October 2026, when WearMesh needed them too; the bridge includes it as a submodule and builds it from source. The `cot` module and the mapping (`MeshPicture`, then in `app`) followed in November 2026 as meshcore-kotlin's `tak` module, so the WearTAK plugin shows the mesh exactly as the bridge does in ATAK. The bridge passes its name to `MeshPicture` for marker remarks. Review of the move ([meshcore-kotlin#12](https://github.com/Colorado-Mesh/meshcore-kotlin/pull/12)) fixed some edge cases on the way: CDATA and comments in incoming events, characters XML forbids, chat message ids and MECP marker limits. Ordinary ATAK traffic looks the same.
 
 Other choices:
 
@@ -290,7 +289,7 @@ Other choices:
 
 ## Testing
 
-- **Unit tests.** The shared protocol module is tested with recorded byte frames and a scripted radio for the client's command queue, in meshcore-kotlin's own CI; `cot` with expected events and parsing of what ATAK sends; `takserver` with a scripted client that connects, pings and exchanges chat.
+- **Unit tests.** The shared protocol module is tested with recorded byte frames and a scripted radio for the client's command queue, in meshcore-kotlin's own CI; `tak` (CoT events, parsing what ATAK sends, and the mesh picture) likewise in meshcore-kotlin; `takserver` with a scripted client that connects, pings and exchanges chat.
 - **On-device checks.** Bluetooth and ATAK behaviour are checked by hand on a Pixel 9 Pro and a Galaxy Tab Active 3.
 
 - **Release checklist.** Every release candidate is checked by hand against [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md) before it is tagged.

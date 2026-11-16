@@ -92,7 +92,7 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
 - Releases: pushing a `v*` tag runs the release workflow, which waits for a maintainer's approval, then builds, signs and drafts a GitHub Release. [RELEASING.md](RELEASING.md) has the procedure; Bud holds the signing key (decided 2026-10-14).
 - Each CI build is signed with a new temporary debug key, so a debug build will not install over a different one: uninstall first. Signed releases share one key, so each installs over the last.
 - CI and the release workflow use action versions that run on Node 24 (`upload-artifact` v7, `setup-gradle` v6 with its open-source cache). Every action is pinned to a full commit rather than a tag, as CodeQL asks, since the release job can read the signing key; Dependabot proposes updates monthly as pull requests.
-- The `cot` and `takserver` modules are plain Kotlin with JUnit tests. `app` is the Android app, built in code; its only resources are the icons.
+- The `takserver` module is plain Kotlin with JUnit tests; CoT events and the mesh picture live in meshcore-kotlin's `tak` module (moved November 2026), tested there. `app` is the Android app, built in code; its only resources are the icons.
 - The protocol module and the Bluetooth link moved to [meshcore-kotlin](https://github.com/Colorado-Mesh/meshcore-kotlin), shared with WearMesh, and come in as a git submodule (decided 2026-10-23). CI and the release workflow check it out; after cloning, run `git submodule update --init`. The only change in the move: the shared client takes the name it gives the radio, and the bridge still says `TAKBridge`.
 
 ## Still to do

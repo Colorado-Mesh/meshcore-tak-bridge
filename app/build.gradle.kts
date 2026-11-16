@@ -51,8 +51,9 @@ kotlin {
 }
 
 dependencies {
-    implementation(project(":cot"))
     implementation(project(":takserver"))
     // Brings in org.coloradomesh.meshcore:protocol too.
     implementation("org.coloradomesh.meshcore:ble")
+    // CoT events and MeshPicture, shared with the WearTAK plugin; also brought in through takserver.
+    implementation("org.coloradomesh.meshcore:tak")
 }
