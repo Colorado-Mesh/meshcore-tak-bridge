@@ -126,4 +126,4 @@ GPL-3.0-or-later. See [LICENSE](LICENSE).
 
 This project is not affiliated with MeshCore, the TAK Product Center, or TAK-MESHCORE. It contains no code from TAK-MESHCORE.
 
-The English MECP code table (`meshcore-kotlin/protocol/.../MecpCodes.kt`) is from the [MECP project](https://github.com/xiang-dev-1/MECP)'s `languages/en.json`, by the MECP contributors, licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The MECP protocol itself is CC0. This project is not affiliated with MECP.
+The English MECP code table (`meshcore-kotlin/protocol/.../MecpCodes.kt`) is from the [MECP project](https://github.com/mecp-org/MECP)'s `languages/en.json`, by the MECP contributors, licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The MECP protocol itself is CC0. This project is not affiliated with MECP.

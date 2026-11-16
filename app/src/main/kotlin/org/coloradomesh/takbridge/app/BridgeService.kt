@@ -319,7 +319,10 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         session = RadioSession(
             context = applicationContext,
             address = address,
-            listener = this,
+            // The library's callback does not say which session failed, so this one is tied to it.
+            listener = object : CompanionClient.Listener by this@BridgeService {
+                override fun onStartUpFailed(what: String) = startUpFailed(session, what)
+            },
             appName = APP_NAME,
             onLog = { BridgeStatus.log("Radio: $it") },
             onLinkReady = { _ -> BridgeStatus.update { status -> status.copy(radio = "Radio linked; reading it…") } },
@@ -399,6 +402,22 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
         // A companion heard after start-up can be chosen for tracking too.
         if (radioUp && new && contact.type == Contact.TYPE_COMPANION) BridgeStatus.update { it.copy(trackable = mesh.companions()) }
         server?.let { active -> sendMeshMarkers(active, only = contact) }
+    }
+
+    /**
+     * The radio linked but never answered the start-up commands, even after the library's retries,
+     * and nothing more will be sent on this link. Drop it and try again, as for a lost link.
+     * Only before start-up has finished: once channels are read, the radio is up. Only for the
+     * session that failed: a late report from a link already replaced must not close the new one.
+     */
+    private fun startUpFailed(from: RadioSession?, what: String) {
+        main.post {
+            val session = from ?: return@post
+            if (radio !== session || radioUp) return@post
+            BridgeStatus.log("Radio: no answer to $what at start-up; reconnecting")
+            onRadioLost("the radio did not answer $what")
+            session.close()
+        }
     }
 
     override fun onChannels(channels: List<Channel>) {
