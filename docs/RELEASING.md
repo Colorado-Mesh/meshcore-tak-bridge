@@ -129,6 +129,7 @@ Releases so far:
 
 | Version | Version code | Published | Tag on |
 | --- | --- | --- | --- |
+| [0.2.0](https://github.com/Colorado-Mesh/meshcore-tak-bridge/releases/tag/v0.2.0) | 4 | 18 November 2026 | `d808585` |
 | [0.1.2](https://github.com/Colorado-Mesh/meshcore-tak-bridge/releases/tag/v0.1.2) | 3 | 20 October 2026 | `43a7d1a` |
 | [0.1.1](https://github.com/Colorado-Mesh/meshcore-tak-bridge/releases/tag/v0.1.1) | 2 | 17 October 2026 | `2b45e8d` |
 | [0.1.0](https://github.com/Colorado-Mesh/meshcore-tak-bridge/releases/tag/v0.1.0) | 1 | 14 October 2026 | `48a2501` |

@@ -84,7 +84,7 @@ Send each of these from the second radio, on a test channel or as a direct messa
 - [ ] Turn the screen off for 5 minutes, or switch to another app. The bridge is still running and connected when you come back.
 - [ ] Stop the bridge. ATAK shows the server as disconnected, and the notification goes.
 
-The overnight run that picks the candidate (RELEASING.md, step 1) covers longer use. The low-battery alert is not checked here; it shows the first time a radio runs down to 20%.
+Longer use is covered by the overnight run that RELEASING.md, step 1, recommends for picking the candidate; if there was none, note that in the record. The low-battery alert is not checked here; it shows the first time a radio runs down to 20%.
 
 ## 10. After tagging: the signed release
 
