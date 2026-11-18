@@ -80,7 +80,7 @@ git clone --recurse-submodules https://github.com/Colorado-Mesh/meshcore-tak-bri
 # or, in a clone made without it:
 git submodule update --init
 
-./gradlew test            # unit tests for cot and takserver
+./gradlew test            # unit tests for takserver (meshcore-kotlin tests its own modules)
 ./gradlew assembleDebug   # app/build/outputs/apk/debug/app-debug.apk
 ```
 
@@ -96,10 +96,9 @@ Changes go into `main` through pull requests, and CI must pass before merging. K
 
 | Module | Contents |
 | --- | --- |
-| `meshcore-kotlin` | A git submodule, shared with [WearMesh](https://github.com/Colorado-Mesh/wearmesh): the MeshCore companion protocol (frame encoding and decoding, and the client that runs the conversation with the radio one command at a time; plain Kotlin) and the Bluetooth link and scanner. See [Colorado-Mesh/meshcore-kotlin](https://github.com/Colorado-Mesh/meshcore-kotlin). |
-| `cot` | The Cursor on Target events ATAK exchanges: markers, contacts, GeoChat, deletes, ping and pong, and the stream framer. Plain Kotlin. |
+| `meshcore-kotlin` | A git submodule, shared with [WearMesh](https://github.com/Colorado-Mesh/wearmesh) and the [WearTAK plugin](https://github.com/Colorado-Mesh/weartak-meshcore): the MeshCore companion protocol (frame encoding and decoding, and the client that runs the conversation with the radio one command at a time; plain Kotlin), the Bluetooth link and scanner, and `tak`: the Cursor on Target events ATAK exchanges (markers, contacts, GeoChat, deletes, ping and pong, the stream framer) and the mesh-to-ATAK mapping (`MeshPicture`). See [Colorado-Mesh/meshcore-kotlin](https://github.com/Colorado-Mesh/meshcore-kotlin). |
 | `takserver` | The loopback TCP server: one client, keepalive replies, inbound chat, rate limit. Also a minimal web API answer on port 8080, so ATAK's poll for server contacts does not fail. Plain Kotlin. |
-| `app` | The Android app: the mesh-to-ATAK mapping (`MeshPicture`), the foreground service that ties the radio and ATAK together, the status and settings screen, and the icons (`res/`). |
+| `app` | The Android app: the foreground service that ties the radio and ATAK together, the status and settings screen, and the icons (`res/`). |
 
 The plain-Kotlin modules have JUnit tests. The app is built in code with no layout resources; its only resources are the icons.
 

@@ -1,8 +1,8 @@
 package org.coloradomesh.takbridge.takserver
 
-import org.coloradomesh.takbridge.cot.ChatSpec
-import org.coloradomesh.takbridge.cot.CotEvents
-import org.coloradomesh.takbridge.cot.InboundChat
+import org.coloradomesh.meshcore.tak.ChatSpec
+import org.coloradomesh.meshcore.tak.CotEvents
+import org.coloradomesh.meshcore.tak.InboundChat
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

@@ -11,7 +11,7 @@ kotlin {
 
 dependencies {
     // The server hands parsed chat messages to its listener, so the type is part of its API.
-    api(project(":cot"))
+    api("org.coloradomesh.meshcore:tak")
     testImplementation(libs.junit)
 }
 

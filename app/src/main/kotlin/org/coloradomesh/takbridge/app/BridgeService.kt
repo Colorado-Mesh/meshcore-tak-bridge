@@ -16,10 +16,6 @@ import android.os.Looper
 import android.os.IBinder
 import org.coloradomesh.takbridge.R
 import org.coloradomesh.meshcore.ble.RadioSession
-import org.coloradomesh.takbridge.cot.ClientIdentity
-import org.coloradomesh.takbridge.cot.CotEvents
-import org.coloradomesh.takbridge.cot.CotParser
-import org.coloradomesh.takbridge.cot.InboundChat
 import org.coloradomesh.meshcore.protocol.Channel
 import org.coloradomesh.meshcore.protocol.ChannelMessage
 import org.coloradomesh.meshcore.protocol.ChannelReplies
@@ -33,6 +29,11 @@ import org.coloradomesh.meshcore.protocol.Mecp
 import org.coloradomesh.meshcore.protocol.RadioBattery
 import org.coloradomesh.meshcore.protocol.SelfInfo
 import org.coloradomesh.meshcore.protocol.TelemetryOutcome
+import org.coloradomesh.meshcore.tak.ClientIdentity
+import org.coloradomesh.meshcore.tak.CotEvents
+import org.coloradomesh.meshcore.tak.CotParser
+import org.coloradomesh.meshcore.tak.InboundChat
+import org.coloradomesh.meshcore.tak.MeshPicture
 import org.coloradomesh.takbridge.takserver.ApiServer
 import org.coloradomesh.takbridge.takserver.TakServer
 import org.coloradomesh.takbridge.takserver.TakServerListener
@@ -68,7 +69,8 @@ class BridgeService : Service(), TakServerListener, CompanionClient.Listener {
     private var refresher: ScheduledExecutorService? = null
     @Volatile
     private var radio: RadioSession? = null
-    private val mesh = MeshPicture()
+    // The name ATAK shows in marker remarks ("linked through MeshCore TAK Bridge").
+    private val mesh = MeshPicture("MeshCore TAK Bridge")
 
     /** Who has spoken on each channel recently, so ATAK users can reply with `@name` or `@@`. */
     private val replies = ChannelReplies()
