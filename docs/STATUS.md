@@ -1,8 +1,10 @@
 # Project status
 
-Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2026-11-15.
+Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2026-11-17.
 
 **Repository:** moved from RobertMTalbot/meshcore-tak-bridge to [Colorado-Mesh/meshcore-tak-bridge](https://github.com/Colorado-Mesh/meshcore-tak-bridge) on 2026-10-13. GitHub redirects the old address, but clones should point their remote at the new one.
+
+**Release candidate for 0.2.0: CI build #103 (`100eeb6`, the merge of pull request #29),** installed on the Tab Active 3 on 16 November 2026 and tested through 17 November, when it passed the [release test checklist](RELEASE-CHECKLIST.md), used for the first time. Since 0.1.2: MECP emergency messages (pull request #26), updated to MECP 1.3.0 (#29); the shared [meshcore-kotlin](https://github.com/Colorado-Mesh/meshcore-kotlin) library in place of the bridge's own protocol module (#27); and a reconnect when a radio links but never answers start-up (#29).
 
 **Latest release: [0.1.2](https://github.com/Colorado-Mesh/meshcore-tak-bridge/releases/tag/v0.1.2), published 20 October 2026.** Version code 3, tag `v0.1.2` on commit `43a7d1a`, built and signed by the release workflow (run 39429231921). Its app code is that of CI build #81 (`9c0dc45`), run overnight on the Tab Active 3 from 19 to 20 October with no problems. It installs over 0.1.1 and keeps the radio, map and tracking settings. Signed with the same certificate as before (SHA-256 `f59a5a05f3924b8e0dd2cc24aeb4f11405875d966d68bc25c2bbae9d38a7e554`), read independently from the published APK, whose checksum also matches. Since 0.1.1:
 - Delivery receipts: ATAK shows its delivered check mark when the mesh acknowledges a direct message (checked on a device, 2026-10-19).
@@ -61,7 +63,7 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
   - **A stale contact gives "no answer" every time** (found 2026-10-19). Like a direct message, a request is encrypted between the two radios' own keys, and a node only answers contacts it knows; with an old contact for this radio, the tracked radio ignores every request. An advert from each radio fixed it. The "no answer" line and the Tracking help on the screen now say so.
   - The firmware also answers only when its "base" telemetry permission is allowed, not just location; worth checking first when a node never answers.
   - Decided 2026-10-19: ask only nodes chosen in advance, and leave drawing the track to ATAK. Trails built from adverts were set aside (companions advert only when their owner chooses), and sharing this phone's position was set aside too (it would mean writing the radio's advert location).
-- **MECP emergency messages** (built 2026-10-21, not yet seen on a device). See "MECP messages" in DESIGN.md.
+- **MECP emergency messages** (built 2026-10-21; checked on a device with build #103, 2026-11-17). See "MECP messages" in DESIGN.md.
   - A channel or direct message in MECP form (mecp.radio) is shown in ATAK's chat in English, with the code line kept below it. Drills say DRILL; unknown codes are named.
   - One with coordinates becomes a spot marker, coloured by severity (grey for drills), with the details in its remarks; it stays from 2 hours (ROUTINE) to a day (MAYDAY, URGENT). At most 50, the least serious dropped first. An active beacon (B01) has one moving marker per sender.
   - Opt-in on the bridge's screen: a real MAYDAY with a position also sounds ATAK's emergency alarm, once.
@@ -99,7 +101,7 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
 
 The next steps, in order, are set out in [DESIGN.md](DESIGN.md) under "Development plan" (decided 2026-10-20):
 
-1. ~~A release test checklist~~ Done 2026-10-20: [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md), linked from RELEASING.md; first to be used on the next release.
+1. ~~A release test checklist~~ Done 2026-10-20: [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md), linked from RELEASING.md; first used on the 0.2.0 candidate (2026-11-17), when MECP checks were added.
 2. **Toolchain update:** Gradle wrapper (8.11.1 is out of date) and Android Gradle plugin together, target and compile SDK 34 to 36, and room for the system bars on the screen; checked with a debug build on a device.
 3. **Features chosen from users' reports:** MECP reading (built 2026-10-21; sending from ATAK may follow), room server posts, splitting long messages, and tidying replies (a received `@[Name]` shown as `@Name`, and replies to this radio marked). Per-person reply contacts were considered and set aside (2026-10-17): too much clutter in the contact list.
 

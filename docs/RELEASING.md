@@ -121,7 +121,7 @@ The secrets must be **environment** secrets on `release`, not repository secrets
    fingerprint: it must match the one noted in step 1.
 6. **Install it from the draft** on a test device. It installs over the previous release and keeps
    its settings. If a debug build is installed, uninstall that first, since debug builds are signed
-   with a different key. Section 9 of the checklist covers this.
+   with a different key. Section 10 of the checklist covers this.
 7. **Publish** the draft on GitHub (edit the notes if you like). Then record the release in
    [STATUS.md](STATUS.md).
 

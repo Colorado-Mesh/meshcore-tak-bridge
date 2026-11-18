@@ -9,6 +9,7 @@ Copy the list into the pull request that sets the new version, tick it as you go
 - The candidate: the debug APK from the CI build of `main` you mean to release (the `meshcore-tak-bridge-debug-apk` artifact). Debug builds are signed with a different key, so uninstall the release first, or use a second device.
 - ATAK, with a TAK server at `127.0.0.1`, port `8087`, TCP, SSL/TLS off.
 - Your companion radio, and a **second companion radio** in range, where you can read and send messages (in the MeshCore app on another phone, say).
+- For MECP: a way to send MECP text from the second radio (typed by hand, or from mesh-client). Use a private test channel or a direct message, never a real MAYDAY on a public or emergency channel.
 - On the second radio, for tracking: its GPS on, and base and location telemetry allowed for your radio. If the two radios have not swapped adverts recently, send a flood advert from each first; an old contact on either side makes direct messages and tracking fail silently.
 
 ## Record
@@ -59,14 +60,25 @@ Copy the list into the pull request that sets the new version, tick it as you go
 - [ ] A direct message from the second radio arrives in ATAK, in a chat with that companion.
 - [ ] With the second radio switched off, a direct message from ATAK ends, after 3 tries (up to a minute or two), with a "Not confirmed: no acknowledgement …" note. Switch it back on.
 
-## 7. Tracking
+## 7. MECP
+
+Send each of these from the second radio, on a test channel or as a direct message.
+
+- [ ] `MECP/0/D01 M01 P05 39.99,-105.13` arrives in ATAK's chat starting `DRILL`, in English with the code line below, and a **grey** marker appears at that position. No alarm sounds.
+- [ ] `MECP/2/R02 R03 45min` shows "Help coming · ETA 45 min".
+- [ ] `MECP/3/L04 Gipfel erreicht @de` ends with "“Gipfel erreicht” (German)".
+- [ ] `MECP/1/M16 P05 39.99,-105.13` shows "Medical supply drop needed" and an **orange** marker.
+- [ ] `MECP/3/L15` (no position) appears in chat only, with no marker.
+- [ ] Optional, only if "Sound ATAK's emergency alarm for a MAYDAY with a position" is ticked, and only as a direct message: `MECP/0/M01 P05 39.99,-105.13` sounds ATAK's alarm once, and `MECP/2/B03` from the same radio cancels it.
+
+## 8. Tracking
 
 - [ ] Under Tracking, choose the second radio. Its line shows "at lat, lon (time)" within a few seconds, and its marker moves to that position.
 - [ ] Moved with ATAK's breadcrumbs on for that contact, it leaves a track (or check, over a longer run, that the position updates each interval).
 - [ ] Disconnect ATAK (or close it). The screen says "Paused until ATAK connects". Reconnect: the node is not asked again at once, only when its interval comes round.
 - [ ] Untick the node, and its line goes.
 
-## 8. Staying up
+## 9. Staying up
 
 - [ ] Switch your radio off. The radio line says "Lost …" and "Trying again in N s", and the battery line goes. Switch it on: the bridge reconnects by itself, and ATAK's picture is still there.
 - [ ] Turn the screen off for 5 minutes, or switch to another app. The bridge is still running and connected when you come back.
@@ -74,7 +86,7 @@ Copy the list into the pull request that sets the new version, tick it as you go
 
 The overnight run that picks the candidate (RELEASING.md, step 1) covers longer use. The low-battery alert is not checked here; it shows the first time a radio runs down to 20%.
 
-## 9. After tagging: the signed release
+## 10. After tagging: the signed release
 
 - [ ] The release run's summary shows the certificate SHA-256 `f59a5a05f3924b8e0dd2cc24aeb4f11405875d966d68bc25c2bbae9d38a7e554`.
 - [ ] Uninstall the debug build, reinstall the previous release, set up a radio and a tracked node, then install the new release from the draft over it. It installs as an update, and the radio, map settings and tracked list are all still there.
