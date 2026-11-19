@@ -1,6 +1,6 @@
 # MeshCore TAK Bridge: Design
 
-First written as a proposal on 11 October 2026. Revised 12 October 2026 to describe the app as built and tested on devices, 13 October 2026 for the move to Colorado Mesh, the connection fixes and the app's branding, 14 October 2026 for the first release, 17 October 2026 for replies on a channel, 18 to 20 October 2026 for delivery receipts, the radio's battery, tracking and the 0.1.2 release, 20 October 2026 for the next steps, and 21 October 2026 for reading MECP messages. Current progress and the to-do list are in [STATUS.md](STATUS.md).
+First written as a proposal on 11 October 2026. Revised 12 October 2026 to describe the app as built and tested on devices, 13 October 2026 for the move to Colorado Mesh, the connection fixes and the app's branding, 14 October 2026 for the first release, 17 October 2026 for replies on a channel, 18 to 20 October 2026 for delivery receipts, the radio's battery, tracking and the 0.1.2 release, 20 October 2026 for the next steps, 21 October 2026 for reading MECP messages, and 18 November 2026 for the 0.2.0 release. Current progress and the to-do list are in [STATUS.md](STATUS.md).
 
 ## Summary
 
@@ -310,12 +310,13 @@ Not yet in place: a simulated radio that runs the whole bridge end to end on a c
 | 6. App shell | Done: radio picker, connection status, map settings, background service, Colorado Mesh header, icon and About |
 | 7. Field test and first release | Done: version 0.1.0 released 14 October 2026, signed with the Colorado Mesh release key; 0.1.1 followed on 17 October |
 | 8. Receipts, radio battery and tracking | Done: version 0.1.2, released 20 October 2026 |
+| 9. MECP reading and the shared library | Done: version 0.2.0, released 18 November 2026 |
 
 ### Next steps
 
 Set on 20 October 2026, in this order. The aim now is wider use, so releases should stay dependable and new features should follow what users ask for.
 
-1. **A release test checklist.** Done 20 October 2026: [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md), checks on a device of about 15 to 20 minutes, run on every release candidate before it is tagged: connecting, ATAK, markers and filters, channel and direct chat both ways, replies, receipts, tracking, recovery, and installing over the previous release. It turns what had been checked from memory into a routine, and RELEASING.md points to it. First to be used on the next release.
+1. **A release test checklist.** Done 20 October 2026: [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md), checks on a device of about 15 to 20 minutes, run on every release candidate before it is tagged: connecting, ATAK, markers and filters, channel and direct chat both ways, replies, receipts, tracking, recovery, and installing over the previous release. It turns what had been checked from memory into a routine, and RELEASING.md points to it. First used on the 0.2.0 release, when MECP checks were added.
 2. **Toolchain update.** The Gradle wrapper (8.11.1, which the release run reports as out of date) and the Android Gradle plugin, together, and the target and compile SDK from 34 to 36. Targeting Android 15 and later makes apps draw under the status bar, so the screen must make room for the system bars. The step is done only once a debug build has been checked on both test devices, the screen's layout included. This keeps CI current, and is also what Google Play would need (see "Open questions and risks").
 3. **Features chosen from what users report.** Reading MECP emergency messages was the first, built on 21 October 2026 (see "MECP messages"); sending them from ATAK may follow. Other candidates, with no order until issues show one: room server posts, which arrive as signed messages and are skipped for now; splitting messages too long for one MeshCore packet; and tidying replies, showing a received `@[Name]` as `@Name` and marking replies addressed to this radio.
 
