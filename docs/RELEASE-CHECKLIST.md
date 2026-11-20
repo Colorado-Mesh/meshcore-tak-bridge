@@ -67,6 +67,7 @@ Send each of these from the second radio, on a test channel or as a direct messa
 - [ ] `MECP/0/D01 M01 P05 39.99,-105.13` arrives in ATAK's chat starting `DRILL`, in English with the code line below, and a **grey** marker appears at that position. No alarm sounds.
 - [ ] `MECP/2/R02 R03 45min` shows "Help coming · ETA 45 min".
 - [ ] `MECP/3/L04 Gipfel erreicht @de` ends with "“Gipfel erreicht” (German)".
+- [ ] `MECP/3/L06 @1845` shows "Running late · 18:45 sender's time", not UTC (MECP 1.4.0: the time is the sender's own).
 - [ ] `MECP/1/M16 P05 39.99,-105.13` shows "Medical supply drop needed" and an **orange** marker.
 - [ ] `MECP/3/L15` (no position) appears in chat only, with no marker.
 - [ ] Optional, only if "Sound ATAK's emergency alarm for a MAYDAY with a position" is ticked, and only as a direct message: `MECP/0/M01 P05 39.99,-105.13` sounds ATAK's alarm once, and `MECP/2/B03` from the same radio cancels it.

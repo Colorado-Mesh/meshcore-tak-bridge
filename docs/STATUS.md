@@ -1,6 +1,6 @@
 # Project status
 
-Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2026-11-18.
+Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2026-11-19.
 
 **Repository:** moved from RobertMTalbot/meshcore-tak-bridge to [Colorado-Mesh/meshcore-tak-bridge](https://github.com/Colorado-Mesh/meshcore-tak-bridge) on 2026-10-13. GitHub redirects the old address, but clones should point their remote at the new one.
 
@@ -69,6 +69,7 @@ Where MeshCore TAK Bridge stands, for anyone picking the work up. Last updated 2
   - Opt-in on the bridge's screen: a real MAYDAY with a position also sounds ATAK's emergency alarm, once.
   - Cancels (B03 "I am OK", D04 "sent in error") are acted on only from a direct message, whose sender the radio knows. On a channel anyone can write any name in front of a message, so there a cancel is only noted on the marker it names (CodeRabbit, pull request #26).
   - Decided 2026-10-21: receiving first; sending MECP from ATAK later. English only for now; the MECP table comes in 20 languages.
+  - Updated 2026-11-19 to MECP 1.4.0 (meshcore-kotlin #15, with the submodule moved to `11aa1b2`), not yet checked on a device or released: `@HHMM` is the sender's local time, shown as sent ("18:45 sender's time"), not UTC; the first ETA by position counts, with no seconds and no decimal part; only whitespace and `, . ; : ! ? ' " ( ) [ ] { }` separate a detail; a message over 200 bytes is still read; R03 reads "ETA [time]". The library update also brings meshcore-kotlin #16 (an app may leave messages on the radio), which the bridge does not use: it keeps collecting them.
   - Updated 2026-11-15 to MECP 1.3.0 (meshcore-kotlin #11): ETAs in hours, days and seconds as well as minutes (`R03 45min`, as mesh-client sends them, `1h30min`, `2h`; `30m` is not read), new code M16, a good position after a bad one is found, and the sender's language is shown. When sending is built, ETAs must be written with no space (`45min`, `1h30min`), as 1.3.0 requires.
 - **No channel echoes** (checked 2026-10-12). A channel message sent from ATAK did not come back: the `Echo check:` log line never appeared. This matches the firmware, which marks its own flooded packets as seen. The guard stays in place: a received channel message matching one just sent from ATAK (`"<radio name>: <text>"`, same channel, within 15 minutes) is dropped and logged.
 - **Never writes to the radio's settings, channels, contacts or clock.**
@@ -103,7 +104,7 @@ The next steps, in order, are set out in [DESIGN.md](DESIGN.md) under "Developme
 
 1. ~~A release test checklist~~ Done 2026-10-20: [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md), linked from RELEASING.md; first used on the 0.2.0 candidate (2026-11-17), when MECP checks were added.
 2. **Toolchain update:** Gradle wrapper (8.11.1 is out of date) and Android Gradle plugin together, target and compile SDK 34 to 36, and room for the system bars on the screen; checked with a debug build on a device.
-3. **MECP 1.4.0** (released 2026-11-17), proposed for 0.2.1: meshcore-kotlin reads it since its pull request #15; the bridge needs a submodule bump, and DESIGN.md's MECP section updated (the `@HHMM` time becomes the sender's local time, not UTC; no seconds in ETAs).
+3. **MECP 1.4.0** (released 2026-11-17), for 0.2.1: submodule moved to meshcore-kotlin `11aa1b2` and DESIGN.md's MECP section rewritten (2026-11-19); release checklist section 7 checks the sender's time. Next: a candidate build checked on a device, then the version pull request.
 4. **Features chosen from users' reports:** MECP reading (built 2026-10-21; sending from ATAK may follow), room server posts, splitting long messages, and tidying replies (a received `@[Name]` shown as `@Name`, and replies to this radio marked). Per-person reply contacts were considered and set aside (2026-10-17): too much clutter in the contact list.
 
 Google Play is not planned until the app is in wider use (2026-10-20); DESIGN.md lists what it will take.
