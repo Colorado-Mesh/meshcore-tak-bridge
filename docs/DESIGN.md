@@ -1,6 +1,6 @@
 # MeshCore TAK Bridge: Design
 
-First written as a proposal on 11 October 2026. Revised 12 October 2026 to describe the app as built and tested on devices, 13 October 2026 for the move to Colorado Mesh, the connection fixes and the app's branding, 14 October 2026 for the first release, 17 October 2026 for replies on a channel, 18 to 20 October 2026 for delivery receipts, the radio's battery, tracking and the 0.1.2 release, 20 October 2026 for the next steps, 21 October 2026 for reading MECP messages, 18 November 2026 for the 0.2.0 release, and 19 November 2026 for MECP 1.4.0 and 1.4.1. Current progress and the to-do list are in [STATUS.md](STATUS.md).
+First written as a proposal on 11 October 2026. Revised 12 October 2026 to describe the app as built and tested on devices, 13 October 2026 for the move to Colorado Mesh, the connection fixes and the app's branding, 14 October 2026 for the first release, 17 October 2026 for replies on a channel, 18 to 20 October 2026 for delivery receipts, the radio's battery, tracking and the 0.1.2 release, 20 October 2026 for the next steps, 21 October 2026 for reading MECP messages, 18 November 2026 for the 0.2.0 release, and 19 November 2026 for MECP 1.4.0 and 1.4.1, and 20 November 2026 for the 0.2.1 release. Current progress and the to-do list are in [STATUS.md](STATUS.md).
 
 ## Summary
 
@@ -311,6 +311,7 @@ Not yet in place: a simulated radio that runs the whole bridge end to end on a c
 | 7. Field test and first release | Done: version 0.1.0 released 14 October 2026, signed with the Colorado Mesh release key; 0.1.1 followed on 17 October |
 | 8. Receipts, radio battery and tracking | Done: version 0.1.2, released 20 October 2026 |
 | 9. MECP reading and the shared library | Done: version 0.2.0, released 18 November 2026 |
+| 10. MECP 1.4.1 | Done: version 0.2.1, released 20 November 2026 |
 
 ### Next steps
 
