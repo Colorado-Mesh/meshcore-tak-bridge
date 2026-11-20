@@ -135,7 +135,7 @@ Releases so far:
 | [0.1.1](https://github.com/Colorado-Mesh/meshcore-tak-bridge/releases/tag/v0.1.1) | 2 | 17 October 2026 | `2b45e8d` |
 | [0.1.0](https://github.com/Colorado-Mesh/meshcore-tak-bridge/releases/tag/v0.1.0) | 1 | 14 October 2026 | `48a2501` |
 
-All are signed with the certificate above. The next release needs `versionCode = 4` or more.
+All are signed with the certificate above. The next release needs `versionCode = 6` or more.
 
 The certificate fingerprint is also in the README, so anyone can check that a download is genuine
 with `apksigner verify --print-certs`.
